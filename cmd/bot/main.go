@@ -9,6 +9,7 @@ import (
 
 	"ravenbot/internal/agent"
 	"ravenbot/internal/config"
+	"ravenbot/internal/notifier"
 
 	"github.com/raythurman2386/cronlib"
 )
@@ -30,6 +31,27 @@ func main() {
 
 	scheduler := cronlib.NewCron()
 
+	// Initialize Notifiers
+	var notifiers []notifier.Notifier
+
+	if cfg.TelegramBotToken != "" && cfg.TelegramChatID != 0 {
+		tn, err := notifier.NewTelegramNotifier(cfg.TelegramBotToken, cfg.TelegramChatID)
+		if err != nil {
+			log.Printf("Warning: Failed to setup Telegram notifier: %v", err)
+		} else {
+			notifiers = append(notifiers, tn)
+		}
+	}
+
+	if cfg.DiscordBotToken != "" && cfg.DiscordChannelID != "" {
+		dn, err := notifier.NewDiscordNotifier(cfg.DiscordBotToken, cfg.DiscordChannelID)
+		if err != nil {
+			log.Printf("Warning: Failed to setup Discord notifier: %v", err)
+		} else {
+			notifiers = append(notifiers, dn)
+		}
+	}
+
 	// Daily Mission at 6:00 AM
 	missionFunc := func(ctx context.Context) {
 		log.Println("Starting scheduled mission...")
@@ -41,17 +63,26 @@ func main() {
 			return
 		}
 
-		path, err := agent.SaveReport(report)
+		path, err := agent.SaveReport("daily_logs", report)
 		if err != nil {
 			log.Printf("Failed to save report: %v", err)
 			return
 		}
 
 		log.Printf("Mission completed. Report saved to: %s", path)
+
+		// Send to all enabled notifiers
+		for _, n := range notifiers {
+			if err := n.Send(ctx, report); err != nil {
+				log.Printf("Failed to send report to %s: %v", n.Name(), err)
+			} else {
+				log.Printf("Report sent to %s", n.Name())
+			}
+		}
 	}
 
-	// Schedule the job: 0 6 * * * (6:00 AM Daily)
-	_, err = scheduler.AddJobWithOptions("0 6 * * *", missionFunc, cronlib.JobOptions{
+	// Schedule the job: 0 0 6 * * * (6:00:00 AM Daily)
+	_, err = scheduler.AddJobWithOptions("0 0 6 * * *", missionFunc, cronlib.JobOptions{
 		Overlap: cronlib.OverlapForbid, // Skip if previous one is still running
 	})
 	if err != nil {

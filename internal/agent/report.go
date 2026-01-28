@@ -7,8 +7,7 @@ import (
 	"time"
 )
 
-func SaveReport(content string) (string, error) {
-	dir := "daily_logs"
+func SaveReport(dir, content string) (string, error) {
 	if err := os.MkdirAll(dir, 0755); err != nil {
 		return "", fmt.Errorf("failed to create logs directory: %w", err)
 	}

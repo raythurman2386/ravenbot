@@ -1,0 +1,502 @@
+
+<!DOCTYPE html>
+<html>
+	<head>
+		<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+		<title>bot: Go Coverage Report</title>
+		<style>
+			body {
+				background: black;
+				color: rgb(80, 80, 80);
+			}
+			body, pre, #legend span {
+				font-family: Menlo, monospace;
+				font-weight: bold;
+			}
+			#topbar {
+				background: black;
+				position: fixed;
+				top: 0; left: 0; right: 0;
+				height: 42px;
+				border-bottom: 1px solid rgb(80, 80, 80);
+			}
+			#content {
+				margin-top: 50px;
+			}
+			#nav, #legend {
+				float: left;
+				margin-left: 10px;
+			}
+			#legend {
+				margin-top: 12px;
+			}
+			#nav {
+				margin-top: 10px;
+			}
+			#legend span {
+				margin: 0 5px;
+			}
+			.cov0 { color: rgb(192, 0, 0) }
+.cov1 { color: rgb(128, 128, 128) }
+.cov2 { color: rgb(116, 140, 131) }
+.cov3 { color: rgb(104, 152, 134) }
+.cov4 { color: rgb(92, 164, 137) }
+.cov5 { color: rgb(80, 176, 140) }
+.cov6 { color: rgb(68, 188, 143) }
+.cov7 { color: rgb(56, 200, 146) }
+.cov8 { color: rgb(44, 212, 149) }
+.cov9 { color: rgb(32, 224, 152) }
+.cov10 { color: rgb(20, 236, 155) }
+
+		</style>
+	</head>
+	<body>
+		<div id="topbar">
+			<div id="nav">
+				<select id="files">
+				
+				<option value="file0">ravenbot/cmd/bot/main.go (0.0%)</option>
+				
+				<option value="file1">ravenbot/internal/agent/agent.go (0.0%)</option>
+				
+				<option value="file2">ravenbot/internal/agent/report.go (100.0%)</option>
+				
+				<option value="file3">ravenbot/internal/agent/tools.go (100.0%)</option>
+				
+				<option value="file4">ravenbot/internal/config/config.go (100.0%)</option>
+				
+				<option value="file5">ravenbot/internal/tools/rss.go (87.5%)</option>
+				
+				<option value="file6">ravenbot/internal/tools/scraper.go (82.6%)</option>
+				
+				</select>
+			</div>
+			<div id="legend">
+				<span>not tracked</span>
+			
+				<span class="cov0">not covered</span>
+				<span class="cov8">covered</span>
+			
+			</div>
+		</div>
+		<div id="content">
+		
+		<pre class="file" id="file0" style="display: none">package main
+
+import (
+        "context"
+        "log"
+        "os"
+        "os/signal"
+        "syscall"
+
+        "ravenbot/internal/agent"
+        "ravenbot/internal/config"
+
+        "github.com/raythurman2386/cronlib"
+)
+
+func main() <span class="cov0" title="0">{
+        // Root context for the application
+        ctx, cancel := context.WithCancel(context.Background())
+        defer cancel()
+
+        cfg, err := config.LoadConfig()
+        if err != nil </span><span class="cov0" title="0">{
+                log.Fatalf("Failed to load config: %v", err)
+        }</span>
+
+        <span class="cov0" title="0">bot, err := agent.NewAgent(ctx, cfg)
+        if err != nil </span><span class="cov0" title="0">{
+                log.Fatalf("Failed to create agent: %v", err)
+        }</span>
+
+        <span class="cov0" title="0">scheduler := cronlib.NewCron()
+
+        // Daily Mission at 6:00 AM
+        missionFunc := func(ctx context.Context) </span><span class="cov0" title="0">{
+                log.Println("Starting scheduled mission...")
+                prompt := "Research the latest technical news in Golang, Python, Geospatial Engineering, and AI/LLM. Generate a detailed daily briefing in Markdown format."
+
+                report, err := bot.RunMission(ctx, prompt)
+                if err != nil </span><span class="cov0" title="0">{
+                        log.Printf("Mission failed: %v", err)
+                        return
+                }</span>
+
+                <span class="cov0" title="0">path, err := agent.SaveReport("daily_logs", report)
+                if err != nil </span><span class="cov0" title="0">{
+                        log.Printf("Failed to save report: %v", err)
+                        return
+                }</span>
+
+                <span class="cov0" title="0">log.Printf("Mission completed. Report saved to: %s", path)</span>
+        }
+
+        // Schedule the job: 0 6 * * * (6:00 AM Daily)
+        <span class="cov0" title="0">_, err = scheduler.AddJobWithOptions("0 6 * * *", missionFunc, cronlib.JobOptions{
+                Overlap: cronlib.OverlapForbid, // Skip if previous one is still running
+        })
+        if err != nil </span><span class="cov0" title="0">{
+                log.Fatalf("Failed to schedule mission: %v", err)
+        }</span>
+
+        <span class="cov0" title="0">scheduler.Start()
+        log.Println("RavenBot started. Scheduled mission at 06:00 Daily.")
+
+        // Handle graceful shutdown
+        sigChan := make(chan os.Signal, 1)
+        signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
+
+        &lt;-sigChan
+        log.Println("Shutting down RavenBot...")
+        scheduler.Stop()
+        cancel()
+        log.Println("RavenBot stopped gracefully.")</span>
+}
+</pre>
+		
+		<pre class="file" id="file1" style="display: none">package agent
+
+import (
+        "context"
+        "fmt"
+        "ravenbot/internal/config"
+        "strings"
+
+        "google.golang.org/genai"
+)
+
+type Agent struct {
+        client *genai.Client
+        cfg    *config.Config
+}
+
+func NewAgent(ctx context.Context, cfg *config.Config) (*Agent, error) <span class="cov0" title="0">{
+        client, err := genai.NewClient(ctx, &amp;genai.ClientConfig{
+                APIKey:  cfg.GeminiAPIKey,
+                Backend: genai.BackendGeminiAPI,
+        })
+        if err != nil </span><span class="cov0" title="0">{
+                return nil, fmt.Errorf("failed to create GenAI client: %w", err)
+        }</span>
+
+        <span class="cov0" title="0">return &amp;Agent{
+                client: client,
+                cfg:    cfg,
+        }, nil</span>
+}
+
+func (a *Agent) RunMission(ctx context.Context, prompt string) (string, error) <span class="cov0" title="0">{
+        model := "gemini-3.0-flash"
+
+        // Create a new session for multi-turn interaction
+        chat, err := a.client.Chats.Create(ctx, model, &amp;genai.GenerateContentConfig{
+                Tools: RavenTools,
+                SystemInstruction: &amp;genai.Content{
+                        Parts: []*genai.Part{
+                                {Text: `You are RavenBot, a sophisticated technical research assistant. 
+Your goal is to generate a high-quality, structured daily newsletter in Markdown format.
+Focus on the following topics:
+1. Golang &amp; Python: New releases, performance optimizations, and popular libraries.
+2. Geospatial Engineering: USGS, Mapbox, Google Earth Engine, and GIS trends.
+3. AI/LLM: Latest models, agentic workflows, and ethical AI developments.
+
+Formatting Requirements:
+- Use a clear # Title with the date.
+- Use ## Sections for each major topic.
+- Provide [Source Name](link) for all news items.
+- Summarize each item in 2-3 concise bullet points.
+- Ensure the tone is professional yet engaging.`},
+                        },
+                },
+        }, nil)
+        if err != nil </span><span class="cov0" title="0">{
+                return "", fmt.Errorf("failed to create chat session: %w", err)
+        }</span>
+
+        <span class="cov0" title="0">resp, err := chat.SendMessage(ctx, genai.Part{Text: prompt})
+        if err != nil </span><span class="cov0" title="0">{
+                return "", fmt.Errorf("failed to send initial message: %w", err)
+        }</span>
+
+        <span class="cov0" title="0">for </span><span class="cov0" title="0">{
+                // Check for function calls in the last candidate
+                if len(resp.Candidates) == 0 || len(resp.Candidates[0].Content.Parts) == 0 </span><span class="cov0" title="0">{
+                        break</span>
+                }
+
+                <span class="cov0" title="0">var toolResponses []genai.Part
+                hasCalls := false
+
+                for _, part := range resp.Candidates[0].Content.Parts </span><span class="cov0" title="0">{
+                        if part.FunctionCall != nil </span><span class="cov0" title="0">{
+                                hasCalls = true
+                                result, err := HandleToolCall(ctx, part.FunctionCall)
+                                if err != nil </span><span class="cov0" title="0">{
+                                        return "", fmt.Errorf("tool call %s failed: %w", part.FunctionCall.Name, err)
+                                }</span>
+
+                                <span class="cov0" title="0">toolResponses = append(toolResponses, genai.Part{
+                                        FunctionResponse: &amp;genai.FunctionResponse{
+                                                Name:     part.FunctionCall.Name,
+                                                Response: map[string]any{"result": result},
+                                        },
+                                })</span>
+                        }
+                }
+
+                <span class="cov0" title="0">if !hasCalls </span><span class="cov0" title="0">{
+                        break</span>
+                }
+
+                // Send tool results back to the model
+                <span class="cov0" title="0">resp, err = chat.SendMessage(ctx, toolResponses...)
+                if err != nil </span><span class="cov0" title="0">{
+                        return "", fmt.Errorf("failed to send tool responses: %w", err)
+                }</span>
+        }
+
+        // Return the final text response
+        <span class="cov0" title="0">if len(resp.Candidates) &gt; 0 &amp;&amp; len(resp.Candidates[0].Content.Parts) &gt; 0 </span><span class="cov0" title="0">{
+                var finalParts []string
+                for _, part := range resp.Candidates[0].Content.Parts </span><span class="cov0" title="0">{
+                        if part.Text != "" </span><span class="cov0" title="0">{
+                                finalParts = append(finalParts, part.Text)
+                        }</span>
+                }
+                <span class="cov0" title="0">return strings.Join(finalParts, "\n"), nil</span>
+        }
+
+        <span class="cov0" title="0">return "", fmt.Errorf("no response from Gemini")</span>
+}
+</pre>
+		
+		<pre class="file" id="file2" style="display: none">package agent
+
+import (
+        "fmt"
+        "os"
+        "path/filepath"
+        "time"
+)
+
+func SaveReport(dir, content string) (string, error) <span class="cov8" title="1">{
+        if err := os.MkdirAll(dir, 0755); err != nil </span><span class="cov8" title="1">{
+                return "", fmt.Errorf("failed to create logs directory: %w", err)
+        }</span>
+
+        <span class="cov8" title="1">date := time.Now().Format("2006-01-02")
+        filename := fmt.Sprintf("Ravenwood_Updates_%s.md", date)
+        path := filepath.Join(dir, filename)
+
+        err := os.WriteFile(path, []byte(content), 0644)
+        if err != nil </span><span class="cov8" title="1">{
+                return "", fmt.Errorf("failed to write report to %s: %w", path, err)
+        }</span>
+
+        <span class="cov8" title="1">return path, nil</span>
+}
+</pre>
+		
+		<pre class="file" id="file3" style="display: none">package agent
+
+import (
+        "context"
+        "ravenbot/internal/tools"
+
+        "google.golang.org/genai"
+)
+
+// Tool definitions for Gemini 3 Flash
+var RavenTools = []*genai.Tool{
+        {
+                FunctionDeclarations: []*genai.FunctionDeclaration{
+                        {
+                                Name:        "FetchRSS",
+                                Description: "Fetches information from an RSS feed URL. Returns a list of titles, links, and descriptions.",
+                                Parameters: &amp;genai.Schema{
+                                        Type: genai.TypeObject,
+                                        Properties: map[string]*genai.Schema{
+                                                "url": {
+                                                        Type:        genai.TypeString,
+                                                        Description: "The URL of the RSS feed.",
+                                                },
+                                        },
+                                        Required: []string{"url"},
+                                },
+                        },
+                        {
+                                Name:        "ScrapePage",
+                                Description: "Scrapes the main text content from a webpage URL.",
+                                Parameters: &amp;genai.Schema{
+                                        Type: genai.TypeObject,
+                                        Properties: map[string]*genai.Schema{
+                                                "url": {
+                                                        Type:        genai.TypeString,
+                                                        Description: "The URL of the webpage to scrape.",
+                                                },
+                                        },
+                                        Required: []string{"url"},
+                                },
+                        },
+                },
+        },
+}
+
+// Map function names to actual implementations
+func HandleToolCall(ctx context.Context, call *genai.FunctionCall) (any, error) <span class="cov8" title="1">{
+        switch call.Name </span>{
+        case "FetchRSS":<span class="cov8" title="1">
+                url := call.Args["url"].(string)
+                return tools.FetchRSS(ctx, url)</span>
+        case "ScrapePage":<span class="cov8" title="1">
+                url := call.Args["url"].(string)
+                return tools.ScrapePage(ctx, url)</span>
+        default:<span class="cov8" title="1">
+                return nil, nil</span>
+        }
+}
+</pre>
+		
+		<pre class="file" id="file4" style="display: none">package config
+
+import (
+        "fmt"
+        "os"
+)
+
+type Config struct {
+        GeminiAPIKey string
+}
+
+func LoadConfig() (*Config, error) <span class="cov8" title="1">{
+        apiKey := os.Getenv("GEMINI_API_KEY")
+        if apiKey == "" </span><span class="cov8" title="1">{
+                return nil, fmt.Errorf("GEMINI_API_KEY environment variable is not set")
+        }</span>
+
+        <span class="cov8" title="1">return &amp;Config{
+                GeminiAPIKey: apiKey,
+        }, nil</span>
+}
+</pre>
+		
+		<pre class="file" id="file5" style="display: none">package tools
+
+import (
+        "context"
+        "fmt"
+
+        "github.com/mmcdole/gofeed"
+)
+
+type RSSItem struct {
+        Title       string
+        Link        string
+        Description string
+}
+
+func FetchRSS(ctx context.Context, url string) ([]RSSItem, error) <span class="cov8" title="1">{
+        fp := gofeed.NewParser()
+        feed, err := fp.ParseURLWithContext(url, ctx)
+        if err != nil </span><span class="cov0" title="0">{
+                return nil, fmt.Errorf("failed to parse RSS feed from %s: %w", url, err)
+        }</span>
+
+        <span class="cov8" title="1">var items []RSSItem
+        for _, item := range feed.Items </span><span class="cov8" title="1">{
+                items = append(items, RSSItem{
+                        Title:       item.Title,
+                        Link:        item.Link,
+                        Description: item.Description,
+                })
+        }</span>
+
+        <span class="cov8" title="1">return items, nil</span>
+}
+</pre>
+		
+		<pre class="file" id="file6" style="display: none">package tools
+
+import (
+        "context"
+        "fmt"
+        "net/http"
+        "strings"
+
+        "github.com/PuerkitoBio/goquery"
+)
+
+func ScrapePage(ctx context.Context, url string) (string, error) <span class="cov8" title="1">{
+        req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
+        if err != nil </span><span class="cov0" title="0">{
+                return "", fmt.Errorf("failed to create request: %w", err)
+        }</span>
+        <span class="cov8" title="1">req.Header.Set("User-Agent", "RavenBot/1.0 (+https://github.com/raythurman2386/RavenBot)")
+
+        resp, err := http.DefaultClient.Do(req)
+        if err != nil </span><span class="cov0" title="0">{
+                return "", fmt.Errorf("failed to fetch page: %w", err)
+        }</span>
+        <span class="cov8" title="1">defer resp.Body.Close()
+
+        if resp.StatusCode != http.StatusOK </span><span class="cov0" title="0">{
+                return "", fmt.Errorf("bad status code: %d", resp.StatusCode)
+        }</span>
+
+        <span class="cov8" title="1">doc, err := goquery.NewDocumentFromReader(resp.Body)
+        if err != nil </span><span class="cov0" title="0">{
+                return "", fmt.Errorf("failed to parse HTML: %w", err)
+        }</span>
+
+        // Remove script, style, and other non-text elements
+        <span class="cov8" title="1">doc.Find("script, style, nav, footer, header").Each(func(i int, s *goquery.Selection) </span><span class="cov8" title="1">{
+                s.Remove()
+        }</span>)
+
+        // Get text and clean it up
+        <span class="cov8" title="1">text := doc.Text()
+        lines := strings.Split(text, "\n")
+        var cleanedLines []string
+        for _, line := range lines </span><span class="cov8" title="1">{
+                trimmed := strings.TrimSpace(line)
+                if trimmed != "" </span><span class="cov8" title="1">{
+                        cleanedLines = append(cleanedLines, trimmed)
+                }</span>
+        }
+
+        <span class="cov8" title="1">return strings.Join(cleanedLines, "\n"), nil</span>
+}
+</pre>
+		
+		</div>
+	</body>
+	<script>
+	(function() {
+		var files = document.getElementById('files');
+		var visible;
+		files.addEventListener('change', onChange, false);
+		function select(part) {
+			if (visible)
+				visible.style.display = 'none';
+			visible = document.getElementById(part);
+			if (!visible)
+				return;
+			files.value = part;
+			visible.style.display = 'block';
+			location.hash = part;
+		}
+		function onChange() {
+			select(files.value);
+			window.scrollTo(0, 0);
+		}
+		if (location.hash != "") {
+			select(location.hash.substr(1));
+		}
+		if (!visible) {
+			select("file0");
+		}
+	})();
+	</script>
+</html>

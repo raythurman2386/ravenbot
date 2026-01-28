@@ -13,8 +13,8 @@ RUN go mod download
 # Copy source code
 COPY . .
 
-# Build the binary for ARM64 (Pi 5)
-RUN CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -o ravenbot ./cmd/bot/main.go
+# Build the binary
+RUN CGO_ENABLED=0 GOOS=linux go build -o ravenbot ./cmd/bot/main.go
 
 # Final stage
 FROM alpine:latest
