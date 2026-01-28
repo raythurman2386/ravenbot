@@ -4,9 +4,12 @@ import (
 	"context"
 	"net/http"
 	"net/http/httptest"
+	"ravenbot/internal/config"
+	"ravenbot/internal/db"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"google.golang.org/genai"
 )
 
@@ -20,6 +23,17 @@ func TestHandleToolCall(t *testing.T) {
 
 	ctx := context.Background()
 
+	// Setup mock DB for tests
+	database, err := db.InitDB(":memory:")
+	require.NoError(t, err)
+	defer database.Close()
+
+	// Setup mock Agent
+	a := &Agent{
+		cfg: &config.Config{GeminiAPIKey: "test"},
+		db:  database,
+	}
+
 	t.Run("FetchRSS", func(t *testing.T) {
 		call := &genai.FunctionCall{
 			Name: "FetchRSS",
@@ -28,7 +42,7 @@ func TestHandleToolCall(t *testing.T) {
 		// Since FetchRSS returns a slice of items, and the server returns a non-RSS response,
 		// it might error, but we're testing the routing here.
 		// Actually, let's just check if it returns without crashing and reaches the right case.
-		_, err := HandleToolCall(ctx, call)
+		_, err := a.handleToolCall(ctx, call)
 		assert.Error(t, err) // Expecting error due to invalid RSS in mock server
 	})
 
@@ -37,7 +51,7 @@ func TestHandleToolCall(t *testing.T) {
 			Name: "ScrapePage",
 			Args: map[string]any{"url": server.URL},
 		}
-		result, err := HandleToolCall(ctx, call)
+		result, err := a.handleToolCall(ctx, call)
 		assert.NoError(t, err)
 		assert.Equal(t, "mock response", result)
 	})
@@ -46,7 +60,7 @@ func TestHandleToolCall(t *testing.T) {
 		call := &genai.FunctionCall{
 			Name: "UnknownTool",
 		}
-		result, err := HandleToolCall(ctx, call)
+		result, err := a.handleToolCall(ctx, call)
 		assert.NoError(t, err)
 		assert.Nil(t, result)
 	})

@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"ravenbot/internal/config"
+	"ravenbot/internal/db"
 	"strings"
 
 	"google.golang.org/genai"
@@ -12,9 +13,10 @@ import (
 type Agent struct {
 	client *genai.Client
 	cfg    *config.Config
+	db     *db.DB
 }
 
-func NewAgent(ctx context.Context, cfg *config.Config) (*Agent, error) {
+func NewAgent(ctx context.Context, cfg *config.Config, database *db.DB) (*Agent, error) {
 	client, err := genai.NewClient(ctx, &genai.ClientConfig{
 		APIKey:  cfg.GeminiAPIKey,
 		Backend: genai.BackendGeminiAPI,
@@ -26,6 +28,7 @@ func NewAgent(ctx context.Context, cfg *config.Config) (*Agent, error) {
 	return &Agent{
 		client: client,
 		cfg:    cfg,
+		db:     database,
 	}, nil
 }
 
@@ -74,7 +77,7 @@ Formatting Requirements:
 		for _, part := range resp.Candidates[0].Content.Parts {
 			if part.FunctionCall != nil {
 				hasCalls = true
-				result, err := HandleToolCall(ctx, part.FunctionCall)
+				result, err := a.handleToolCall(ctx, part.FunctionCall)
 				if err != nil {
 					return "", fmt.Errorf("tool call %s failed: %w", part.FunctionCall.Name, err)
 				}

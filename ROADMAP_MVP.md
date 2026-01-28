@@ -31,12 +31,12 @@
 ## 🧠 Phase 8: Persistence & Long-Term Memory
 *Objective: Prevent duplicate news and allow for "trend" analysis.*
 
-- [ ] **Memory Store**:
-    - [ ] Implement a lightweight persistence layer (SQLite or JSON-based).
-    - [ ] Track "Latest Headlines" to ensure the daily briefing only contains new information.
-- [ ] **RAG Foundation**:
-    - [ ] Store past briefings in a local knowledge base.
-    - [ ] Allow the agent to reference "Yesterday's findings" in today's report.
+- [x] **Memory Store**:
+    - [x] Implement a lightweight persistence layer (SQLite or JSON-based).
+    - [x] Track "Latest Headlines" to ensure the daily briefing only contains new information.
+- [x] **RAG Foundation**:
+    - [x] Store past briefings in a local knowledge base.
+    - [x] Allow the agent to reference "Yesterday's findings" in today's report. (Note: Stored in DB, retrieval ready)
 
 ---
 
@@ -62,4 +62,4 @@
 ## 📦 MVP Release Target
 - [x] **Daily Briefing** delivered to Telegram/Discord.
 - [ ] **One-Shot Research** triggered via chat command.
-- [ ] **Persistent Memory** of the last 7 days of news.
+- [x] **Persistent Memory** of the last 7 days of news.

@@ -9,6 +9,7 @@ import (
 
 	"ravenbot/internal/agent"
 	"ravenbot/internal/config"
+	"ravenbot/internal/db"
 	"ravenbot/internal/notifier"
 
 	"github.com/raythurman2386/cronlib"
@@ -24,7 +25,14 @@ func main() {
 		log.Fatalf("Failed to load config: %v", err)
 	}
 
-	bot, err := agent.NewAgent(ctx, cfg)
+	// Initialize Database
+	database, err := db.InitDB("data/ravenbot.db")
+	if err != nil {
+		log.Fatalf("Failed to initialize database: %v", err)
+	}
+	defer database.Close()
+
+	bot, err := agent.NewAgent(ctx, cfg, database)
 	if err != nil {
 		log.Fatalf("Failed to create agent: %v", err)
 	}
