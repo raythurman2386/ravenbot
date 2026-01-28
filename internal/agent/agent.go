@@ -3,8 +3,8 @@ package agent
 import (
 	"context"
 	"fmt"
-	"ravenbot/internal/config"
-	"ravenbot/internal/db"
+	"github.com/raythurman2386/ravenbot/internal/config"
+	"github.com/raythurman2386/ravenbot/internal/db"
 	"strings"
 	"sync"
 
@@ -22,7 +22,7 @@ type Agent struct {
 const model = "gemini-3-flash-preview"
 
 // Raven's conversational persona
-const systemPrompt = `You are RavenBot, a friendly and knowledgeable AI assistant built by Ray Thurman.
+const systemPrompt = `You are ravenbot, a friendly and knowledgeable AI assistant built by Ray Thurman.
 
 Your personality:
 - Helpful, conversational, and approachable
@@ -131,7 +131,7 @@ func (a *Agent) RunMission(ctx context.Context, prompt string) (string, error) {
 		Tools: RavenTools,
 		SystemInstruction: &genai.Content{
 			Parts: []*genai.Part{
-				{Text: `You are RavenBot, a sophisticated technical research assistant. 
+				{Text: `You are ravenbot, a sophisticated technical research assistant. 
 Your goal is to generate high-quality, structured briefings or research reports in Markdown format.
 Focus on providing accurate, technical, and well-sourced information.
 

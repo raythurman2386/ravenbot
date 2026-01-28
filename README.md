@@ -1,8 +1,8 @@
-# 🦅 RavenBot: Autonomous Technical Research Agent
+# 🦅 ravenbot: Autonomous Technical Research Agent
 
-RavenBot is a high-performance, self-hosted autonomous AI agent built in **Go 1.25+**. It functions as a proactive technical assistant that researches the latest trends in Golang, AI/LLM, and Geospatial Engineering, delivering high-quality briefings directly to your pocket.
+ravenbot is a high-performance, self-hosted autonomous AI agent built in **Go 1.25+**. It functions as a proactive technical assistant that researches the latest trends in Golang, AI/LLM, and Geospatial Engineering, delivering high-quality briefings directly to your pocket.
 
-Equipped with a **Gemini 3 Pro** brain, RavenBot can browse the web, execute system commands, and even delegate complex repository tasks to the **Gemini Jules Agent**.
+Equipped with a **Gemini 3 Pro** brain, ravenbot can browse the web, execute system commands, and even delegate complex repository tasks to the **Gemini Jules Agent**.
 
 ---
 
@@ -50,12 +50,12 @@ Equipped with a **Gemini 3 Pro** brain, RavenBot can browse the web, execute sys
 - (Optional) Jules Agent API Key
 
 ### 2. Deployment (Docker)
-RavenBot is designed to run 24/7 in a lightweight Docker container.
+ravenbot is designed to run 24/7 in a lightweight Docker container.
 
 ```bash
 # Clone the repository
-git clone https://github.com/raythurman2386/RavenBot.git
-cd RavenBot
+git clone https://github.com/raythurman2386/ravenbot.git
+cd ravenbot
 
 # Set up your environment
 cp .env.example .env
@@ -66,7 +66,7 @@ docker compose up -d --build
 ```
 
 ### 3. Interactive Mode (CLI)
-If you aren't using messaging apps, you can interact with RavenBot directly through the container terminal:
+If you aren't using messaging apps, you can interact with ravenbot directly through the container terminal:
 
 ```bash
 docker attach ravenbot-ravenbot-1

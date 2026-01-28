@@ -7,10 +7,10 @@ import (
 	"log"
 	"os"
 	"os/signal"
-	"ravenbot/internal/agent"
-	"ravenbot/internal/config"
-	"ravenbot/internal/db"
-	"ravenbot/internal/notifier"
+	"github.com/raythurman2386/ravenbot/internal/agent"
+	"github.com/raythurman2386/ravenbot/internal/config"
+	"github.com/raythurman2386/ravenbot/internal/db"
+	"github.com/raythurman2386/ravenbot/internal/notifier"
 	"strings"
 	"syscall"
 	"time"
@@ -18,7 +18,7 @@ import (
 	"github.com/raythurman2386/cronlib"
 )
 
-const helpMessage = `🐦 **RavenBot Commands**
+const helpMessage = `🐦 **ravenbot Commands**
 
 **Conversation:**
 Just type naturally! I can chat about anything.
@@ -33,7 +33,7 @@ Just type naturally! I can chat about anything.
 **Examples:**
 • "What's new in Go 1.25?"
 • "/research kubernetes best practices"
-• "/jules raythurman2386/RavenBot add unit tests"
+• "/jules raythurman2386/ravenbot add unit tests"
 • "/status"
 `
 
@@ -213,7 +213,7 @@ func main() {
 	go func() {
 		scanner := bufio.NewScanner(os.Stdin)
 		sessionID := "cli-local"
-		fmt.Println("\n🐦 RavenBot ready! Type anything to chat, or /help for commands.")
+		fmt.Println("\n🐦 ravenbot ready! Type anything to chat, or /help for commands.")
 		fmt.Print("> ")
 		for scanner.Scan() {
 			text := scanner.Text()
@@ -232,7 +232,7 @@ func main() {
 	}
 
 	scheduler.Start()
-	log.Printf("RavenBot started. Time: %s", time.Now().Format("15:04:05"))
+	log.Printf("ravenbot started. Time: %s", time.Now().Format("15:04:05"))
 	log.Println("Scheduled daily briefing at 07:00")
 
 	// Graceful shutdown
@@ -240,8 +240,8 @@ func main() {
 	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
 
 	<-sigChan
-	log.Println("Shutting down RavenBot...")
+	log.Println("Shutting down ravenbot...")
 	scheduler.Stop()
 	cancel()
-	log.Println("RavenBot stopped gracefully.")
+	log.Println("ravenbot stopped gracefully.")
 }

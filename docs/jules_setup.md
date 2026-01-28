@@ -1,6 +1,6 @@
-# Jules Agent Setup for RavenBot
+# Jules Agent Setup for ravenbot
 
-RavenBot integrates with the **Jules Agent API** to allow you to delegate complex coding and repository tasks directly from your chat interface. This guide explains how to set up and use this feature.
+ravenbot integrates with the **Jules Agent API** to allow you to delegate complex coding and repository tasks directly from your chat interface. This guide explains how to set up and use this feature.
 
 ## 1. Prerequisites
 
@@ -10,7 +10,7 @@ To use the Jules Agent, you must have:
 
 ## 2. Connect Your Repository
 
-Before RavenBot can delegate tasks for a specific repository, that repository must be connected to Jules.
+Before ravenbot can delegate tasks for a specific repository, that repository must be connected to Jules.
 
 1.  Visit [https://jules.google](https://jules.google).
 2.  Connect the GitHub repository you wish to manage.
@@ -38,15 +38,15 @@ Once configured, you can use the `/jules` command in your connected Discord chan
 
 **Example:**
 ```
-/jules raythurman2386/RavenBot Add a new documentation file for Discord setup
+/jules raythurman2386/ravenbot Add a new documentation file for Discord setup
 ```
 
 ### How it Works
 
-1.  **Request:** RavenBot sends your task and repository context to the Jules API (`v1alpha`).
-2.  **Session:** A new Jules session is created with the title "RavenBot Task: ...".
+1.  **Request:** ravenbot sends your task and repository context to the Jules API (`v1alpha`).
+2.  **Session:** A new Jules session is created with the title "ravenbot Task: ...".
 3.  **Automation:** The request is sent with `AutomationMode: "AUTO_CREATE_PR"`, meaning Jules will attempt to implement the requested change and automatically open a Pull Request on the target repository.
-4.  **Feedback:** RavenBot will reply with the Session Name/ID confirming the task has been initiated.
+4.  **Feedback:** ravenbot will reply with the Session Name/ID confirming the task has been initiated.
 
 ## 5. Troubleshooting
 

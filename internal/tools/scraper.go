@@ -14,7 +14,7 @@ func ScrapePage(ctx context.Context, url string) (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("failed to create request: %w", err)
 	}
-	req.Header.Set("User-Agent", "RavenBot/1.0 (+https://github.com/raythurman2386/RavenBot)")
+	req.Header.Set("User-Agent", "ravenbot/1.0 (+https://github.com/raythurman2386/ravenbot)")
 
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {

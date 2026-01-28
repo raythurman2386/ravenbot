@@ -2,7 +2,7 @@ package agent
 
 import (
 	"context"
-	"ravenbot/internal/db"
+	"github.com/raythurman2386/ravenbot/internal/db"
 	"testing"
 
 	"github.com/stretchr/testify/assert"

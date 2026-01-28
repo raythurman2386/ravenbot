@@ -1,4 +1,4 @@
-name: RavenBot CI
+name: ravenbot CI
 
 on:
   push:

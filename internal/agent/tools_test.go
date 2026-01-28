@@ -4,8 +4,8 @@ import (
 	"context"
 	"net/http"
 	"net/http/httptest"
-	"ravenbot/internal/config"
-	"ravenbot/internal/db"
+	"github.com/raythurman2386/ravenbot/internal/config"
+	"github.com/raythurman2386/ravenbot/internal/db"
 	"testing"
 
 	"github.com/stretchr/testify/assert"

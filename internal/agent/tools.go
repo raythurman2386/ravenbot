@@ -2,7 +2,7 @@ package agent
 
 import (
 	"context"
-	"ravenbot/internal/tools"
+	"github.com/raythurman2386/ravenbot/internal/tools"
 
 	"google.golang.org/genai"
 )

@@ -31,7 +31,7 @@ type JulesSessionRequest struct {
 }
 
 // DelegateToJules calls the alpha Jules Agent API to perform a repository task.
-// The repo should be in the format "owner/repo" (e.g., "raythurman2386/RavenBot").
+// The repo should be in the format "owner/repo" (e.g., "raythurman2386/ravenbot").
 // Note: The repository must be connected to Jules via https://jules.google first.
 func DelegateToJules(ctx context.Context, apiKey, repo, task string) (string, error) {
 	if apiKey == "" {
@@ -57,7 +57,7 @@ func DelegateToJules(ctx context.Context, apiKey, repo, task string) (string, er
 				StartingBranch: "main",
 			},
 		},
-		Title:               fmt.Sprintf("RavenBot Task: %s", truncateString(task, 50)),
+		Title:               fmt.Sprintf("ravenbot Task: %s", truncateString(task, 50)),
 		RequirePlanApproval: false, // Auto-approve for autonomous operation
 		AutomationMode:      "AUTO_CREATE_PR",
 	}

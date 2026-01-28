@@ -1,13 +1,17 @@
-module ravenbot
+module github.com/raythurman2386/ravenbot
 
 go 1.25.2
 
 require (
 	github.com/PuerkitoBio/goquery v1.11.0
+	github.com/bwmarrin/discordgo v0.29.0
+	github.com/chromedp/chromedp v0.14.2
+	github.com/go-telegram-bot-api/telegram-bot-api/v5 v5.5.1
 	github.com/mmcdole/gofeed v1.3.0
 	github.com/raythurman2386/cronlib v0.0.0-20260127031051-ab6cf138e033
 	github.com/stretchr/testify v1.8.1
 	google.golang.org/genai v1.43.0
+	modernc.org/sqlite v1.44.3
 )
 
 require (
@@ -15,14 +19,11 @@ require (
 	cloud.google.com/go/auth v0.9.3 // indirect
 	cloud.google.com/go/compute/metadata v0.5.0 // indirect
 	github.com/andybalholm/cascadia v1.3.3 // indirect
-	github.com/bwmarrin/discordgo v0.29.0 // indirect
 	github.com/chromedp/cdproto v0.0.0-20250724212937-08a3db8b4327 // indirect
-	github.com/chromedp/chromedp v0.14.2 // indirect
 	github.com/chromedp/sysutil v1.1.0 // indirect
 	github.com/davecgh/go-spew v1.1.1 // indirect
 	github.com/dustin/go-humanize v1.0.1 // indirect
 	github.com/go-json-experiment/json v0.0.0-20250725192818-e39067aee2d2 // indirect
-	github.com/go-telegram-bot-api/telegram-bot-api/v5 v5.5.1 // indirect
 	github.com/gobwas/httphead v0.1.0 // indirect
 	github.com/gobwas/pool v0.2.1 // indirect
 	github.com/gobwas/ws v1.4.0 // indirect
@@ -53,5 +54,4 @@ require (
 	modernc.org/libc v1.67.6 // indirect
 	modernc.org/mathutil v1.7.1 // indirect
 	modernc.org/memory v1.11.0 // indirect
-	modernc.org/sqlite v1.44.3 // indirect
 )

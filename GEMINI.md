@@ -1,6 +1,6 @@
-# RavenBot
+# ravenbot
 
-RavenBot is an autonomous technical research agent built in Go 1.25+. It leverages Google's Gemini 3 Pro model to proactively research technical topics, scrape the web, and deliver daily briefings via Telegram and Discord. It is designed to be self-hosted and persistent, capable of remembering past findings and executing complex tasks.
+ravenbot is an autonomous technical research agent built in Go 1.25+. It leverages Google's Gemini 3 Pro model to proactively research technical topics, scrape the web, and deliver daily briefings via Telegram and Discord. It is designed to be self-hosted and persistent, capable of remembering past findings and executing complex tasks.
 
 ## Project Overview
 

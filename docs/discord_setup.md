@@ -1,12 +1,12 @@
-# Discord Setup Guide for RavenBot
+# Discord Setup Guide for ravenbot
 
-This guide explains how to set up the Discord integration for RavenBot. To use RavenBot with Discord, you need to create a bot application, invite it to your server, and configure the necessary environment variables.
+This guide explains how to set up the Discord integration for ravenbot. To use ravenbot with Discord, you need to create a bot application, invite it to your server, and configure the necessary environment variables.
 
 ## 1. Create a Discord Application
 
 1.  Go to the [Discord Developer Portal](https://discord.com/developers/applications).
 2.  Click **New Application** in the top right corner.
-3.  Give your application a name (e.g., "RavenBot") and click **Create**.
+3.  Give your application a name (e.g., "ravenbot") and click **Create**.
 
 ## 2. Create a Bot User and Get Token
 
@@ -20,7 +20,7 @@ This guide explains how to set up the Discord integration for RavenBot. To use R
     ```
 
 5.  (Optional) Disable "Public Bot" if you want to prevent others from adding your bot to their servers.
-6.  Ensure **Message Content Intent** is enabled if the bot needs to read message content (RavenBot requires this to read commands).
+6.  Ensure **Message Content Intent** is enabled if the bot needs to read message content (ravenbot requires this to read commands).
 
 ## 3. Invite the Bot to Your Server
 
@@ -36,11 +36,11 @@ This guide explains how to set up the Discord integration for RavenBot. To use R
 
 ## 4. Get the Channel ID
 
-RavenBot is designed to listen to a specific channel for security reasons.
+ravenbot is designed to listen to a specific channel for security reasons.
 
 1.  Open your Discord User Settings (gear icon).
 2.  Go to **Advanced** and enable **Developer Mode**.
-3.  Right-click the channel where you want RavenBot to be active.
+3.  Right-click the channel where you want ravenbot to be active.
 4.  Click **Copy Channel ID** (or **Copy ID**).
 5.  This ID goes into your `.env` file as `DISCORD_CHANNEL_ID`.
 
@@ -57,4 +57,4 @@ DISCORD_BOT_TOKEN=your_discord_bot_token
 DISCORD_CHANNEL_ID=your_discord_channel_id
 ```
 
-Once configured, restart RavenBot. The bot will now listen for commands (like `/research` or `/jules`) in that specific channel.
+Once configured, restart ravenbot. The bot will now listen for commands (like `/research` or `/jules`) in that specific channel.

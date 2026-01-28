@@ -1,14 +1,14 @@
-# Telegram Setup Guide for RavenBot
+# Telegram Setup Guide for ravenbot
 
-This guide explains how to set up the Telegram integration for RavenBot. To use RavenBot with Telegram, you need to create a bot via BotFather and configure the necessary environment variables.
+This guide explains how to set up the Telegram integration for ravenbot. To use ravenbot with Telegram, you need to create a bot via BotFather and configure the necessary environment variables.
 
 ## 1. Create a New Bot
 
 1.  Open Telegram and search for **@BotFather**.
 2.  Start a chat with BotFather and send the command `/newbot`.
 3.  Follow the prompts:
-    *   **Name:** Choose a display name for your bot (e.g., "RavenBot").
-    *   **Username:** Choose a unique username ending in `bot` (e.g., `MyRavenBot`).
+    *   **Name:** Choose a display name for your bot (e.g., "ravenbot").
+    *   **Username:** Choose a unique username ending in `bot` (e.g., `Myravenbot`).
 4.  Once created, BotFather will send you a message with your **HTTP API Token**.
 
 ## 2. Configure the Bot Token
@@ -21,7 +21,7 @@ TELEGRAM_BOT_TOKEN=123456789:ABCdefGHIjklMNOpqrSTUvwxyz
 
 ## 3. Get Your Chat ID
 
-RavenBot requires a specific Chat ID to send messages to (and to accept commands from). This ensures the bot doesn't respond to unauthorized users.
+ravenbot requires a specific Chat ID to send messages to (and to accept commands from). This ensures the bot doesn't respond to unauthorized users.
 
 1.  Open a chat with your new bot in Telegram (search for its username).
 2.  Send a message (e.g., "Hello") to the bot.
@@ -50,4 +50,4 @@ TELEGRAM_BOT_TOKEN=your_telegram_bot_token
 TELEGRAM_CHAT_ID=your_telegram_chat_id
 ```
 
-Once configured, restart RavenBot. The bot will now send daily briefings to this chat and accept commands (like `/research` or `/jules`) from it.
+Once configured, restart ravenbot. The bot will now send daily briefings to this chat and accept commands (like `/research` or `/jules`) from it.
