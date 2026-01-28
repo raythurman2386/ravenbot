@@ -43,11 +43,12 @@
 ## 💬 Phase 9: Interactive Agent (Two-Way Comms)
 *Objective: Allow for ad-hoc research requests via messaging apps.*
 
-- [ ] **Command Handler**:
-    - [ ] Enable Telegram/Discord message listeners.
-    - [ ] Handle `/research <topic>` command to trigger `RunMission` on demand.
-- [ ] **Interactive Tools**: 
-    - [ ] Allow the agent to ask clarifying questions via message if a search is too broad.
+- [x] **Command Handler**:
+    - [x] Enable Telegram/Discord message listeners.
+    - [x] Allow terminal commands to be sent to the agent (for when no messaging app is available).
+    - [x] Handle `/research <topic>` command to trigger `RunMission` on demand.
+- [x] **Interactive Tools**: 
+    - [x] Allow the agent to ask clarifying questions via message if a search is too broad. (Note: Handled via Gemini multi-turn session)
 
 ---
 
@@ -61,5 +62,5 @@
 
 ## 📦 MVP Release Target
 - [x] **Daily Briefing** delivered to Telegram/Discord.
-- [ ] **One-Shot Research** triggered via chat command.
+- [x] **One-Shot Research** triggered via chat command.
 - [x] **Persistent Memory** of the last 7 days of news.

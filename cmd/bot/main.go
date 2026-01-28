@@ -1,16 +1,18 @@
 package main
 
 import (
+	"bufio"
 	"context"
+	"fmt"
 	"log"
 	"os"
 	"os/signal"
-	"syscall"
-
 	"ravenbot/internal/agent"
 	"ravenbot/internal/config"
 	"ravenbot/internal/db"
 	"ravenbot/internal/notifier"
+	"strings"
+	"syscall"
 
 	"github.com/raythurman2386/cronlib"
 )
@@ -89,8 +91,71 @@ func main() {
 		}
 	}
 
-	// Schedule the job: 0 0 6 * * * (6:00:00 AM Daily)
-	_, err = scheduler.AddJobWithOptions("0 0 6 * * *", missionFunc, cronlib.JobOptions{
+	// Command Processor
+	processCommand := func(text string, reply func(string)) {
+		if !strings.HasPrefix(text, "/research") {
+			return
+		}
+
+		topic := strings.TrimSpace(strings.TrimPrefix(text, "/research"))
+		if topic == "" {
+			reply("Please provide a topic. Usage: /research <topic>")
+			return
+		}
+
+		reply(fmt.Sprintf("Starting research mission for: %s...", topic))
+		prompt := fmt.Sprintf("Research the following topic in depth and provide a technical report: %s", topic)
+
+		report, err := bot.RunMission(ctx, prompt)
+		if err != nil {
+			reply(fmt.Sprintf("Research mission failed: %v", err))
+			return
+		}
+
+		// Save briefing to DB
+		if err := database.SaveBriefing(ctx, report); err != nil {
+			log.Printf("Failed to save interactive briefing to DB: %v", err)
+		}
+
+		reply(report)
+	}
+
+	// Start Notifier Listeners
+	for _, n := range notifiers {
+		switch botNotifier := n.(type) {
+		case *notifier.TelegramNotifier:
+			go botNotifier.StartListener(ctx, func(chatID int64, text string) {
+				processCommand(text, func(reply string) {
+					if err := botNotifier.Send(ctx, reply); err != nil {
+						log.Printf("Failed to send Telegram reply: %v", err)
+					}
+				})
+			})
+		case *notifier.DiscordNotifier:
+			go botNotifier.StartListener(ctx, func(channelID string, text string) {
+				processCommand(text, func(reply string) {
+					if err := botNotifier.Send(ctx, reply); err != nil {
+						log.Printf("Failed to send Discord reply: %v", err)
+					}
+				})
+			})
+		}
+	}
+
+	// CLI Listener (stdin)
+	go func() {
+		scanner := bufio.NewScanner(os.Stdin)
+		log.Println("CLI Listener active. Type /research <topic> to test.")
+		for scanner.Scan() {
+			text := scanner.Text()
+			processCommand(text, func(reply string) {
+				log.Printf("\n--- RavenBot Response ---\n%s\n------------------------\n", reply)
+			})
+		}
+	}()
+
+	// Schedule the job: 0 30 20 * * * (20:30:00 Daily)
+	_, err = scheduler.AddJobWithOptions("0 30 20 * * *", missionFunc, cronlib.JobOptions{
 		Overlap: cronlib.OverlapForbid, // Skip if previous one is still running
 	})
 	if err != nil {
@@ -98,7 +163,7 @@ func main() {
 	}
 
 	scheduler.Start()
-	log.Println("RavenBot started. Scheduled mission at 06:00 Daily.")
+	log.Println("RavenBot started. Scheduled mission at 20:30 Daily.")
 
 	// Handle graceful shutdown
 	sigChan := make(chan os.Signal, 1)

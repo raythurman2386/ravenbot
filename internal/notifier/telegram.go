@@ -45,3 +45,29 @@ func (t *TelegramNotifier) Send(ctx context.Context, message string) error {
 func (t *TelegramNotifier) Name() string {
 	return "Telegram"
 }
+
+// StartListener begins listening for messages on Telegram.
+func (t *TelegramNotifier) StartListener(ctx context.Context, handler func(chatID int64, text string)) {
+	u := tgbotapi.NewUpdate(0)
+	u.Timeout = 60
+
+	updates := t.bot.GetUpdatesChan(u)
+
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case update := <-updates:
+			if update.Message == nil {
+				continue
+			}
+
+			// Security: Only respond to the configured ChatID
+			if update.Message.Chat.ID != t.chatID {
+				continue
+			}
+
+			handler(update.Message.Chat.ID, update.Message.Text)
+		}
+	}
+}

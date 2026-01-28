@@ -42,3 +42,27 @@ func (d *DiscordNotifier) Send(ctx context.Context, message string) error {
 func (d *DiscordNotifier) Name() string {
 	return "Discord"
 }
+
+// StartListener begins listening for messages on Discord.
+func (d *DiscordNotifier) StartListener(ctx context.Context, handler func(channelID string, text string)) {
+	d.session.AddHandler(func(s *discordgo.Session, m *discordgo.MessageCreate) {
+		// Ignore all messages created by the bot itself
+		if m.Author.ID == s.State.User.ID {
+			return
+		}
+
+		// Security: Only respond to the configured ChannelID
+		if m.ChannelID != d.channelID {
+			return
+		}
+
+		handler(m.ChannelID, m.Content)
+	})
+
+	if err := d.session.Open(); err != nil {
+		return // Log this in main
+	}
+
+	<-ctx.Done()
+	d.session.Close()
+}
