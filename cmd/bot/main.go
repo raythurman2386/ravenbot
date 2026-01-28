@@ -198,8 +198,8 @@ func main() {
 		}
 	}()
 
-	// Schedule the job: 0 50 20 * * * (20:50:00 Daily)
-	_, err = scheduler.AddJobWithOptions("0 50 20 * * *", missionFunc, cronlib.JobOptions{
+	// Schedule the job: 0 0 7 * * * (07:00:00 Daily)
+	_, err = scheduler.AddJobWithOptions("0 0 7 * * *", missionFunc, cronlib.JobOptions{
 		Overlap: cronlib.OverlapForbid, // Skip if previous one is still running
 	})
 	if err != nil {
@@ -208,7 +208,7 @@ func main() {
 
 	scheduler.Start()
 	log.Printf("RavenBot started in %s. Current time: %s", time.Local, time.Now().Format("15:04:05"))
-	log.Println("Scheduled mission at 20:50 Daily.")
+	log.Println("Scheduled mission at 07:00 Daily.")
 
 	// Handle graceful shutdown
 	sigChan := make(chan os.Signal, 1)
