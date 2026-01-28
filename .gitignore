@@ -10,3 +10,5 @@ main
 
 # Logs/Artifacts
 /daily_logs/
+data/*.db
+data/*.db-*

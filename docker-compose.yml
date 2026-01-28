@@ -8,6 +8,8 @@ services:
       - TELEGRAM_CHAT_ID=${TELEGRAM_CHAT_ID}
       - DISCORD_BOT_TOKEN=${DISCORD_BOT_TOKEN}
       - DISCORD_CHANNEL_ID=${DISCORD_CHANNEL_ID}
+      - JULES_API_KEY=${JULES_API_KEY}
+      - TZ=America/Chicago
     stdin_open: true
     tty: true
     volumes:

@@ -13,6 +13,7 @@ import (
 	"ravenbot/internal/notifier"
 	"strings"
 	"syscall"
+	"time"
 
 	"github.com/raythurman2386/cronlib"
 )
@@ -206,7 +207,8 @@ func main() {
 	}
 
 	scheduler.Start()
-	log.Println("RavenBot started. Scheduled mission at 20:50 Daily.")
+	log.Printf("RavenBot started in %s. Current time: %s", time.Local, time.Now().Format("15:04:05"))
+	log.Println("Scheduled mission at 20:50 Daily.")
 
 	// Handle graceful shutdown
 	sigChan := make(chan os.Signal, 1)
