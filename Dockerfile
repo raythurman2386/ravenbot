@@ -19,8 +19,8 @@ RUN CGO_ENABLED=0 GOOS=linux go build -o ravenbot ./cmd/bot/main.go
 # Final stage
 FROM alpine:latest
 
-# Install certificates for HTTPS requests
-RUN apk add --no-cache ca-certificates
+# Install certificates for HTTPS requests and timezone data
+RUN apk add --no-cache ca-certificates tzdata
 
 WORKDIR /app
 
