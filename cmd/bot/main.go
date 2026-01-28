@@ -213,7 +213,7 @@ func main() {
 	go func() {
 		scanner := bufio.NewScanner(os.Stdin)
 		sessionID := "cli-local"
-		fmt.Println("\n🐦 RavenBot ready! Type anything to chat, or /help for commands.\n")
+		fmt.Println("\n🐦 RavenBot ready! Type anything to chat, or /help for commands.")
 		fmt.Print("> ")
 		for scanner.Scan() {
 			text := scanner.Text()
