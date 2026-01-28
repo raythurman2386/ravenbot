@@ -2,10 +2,10 @@ package agent
 
 import (
 	"context"
-	"net/http"
-	"net/http/httptest"
 	"github.com/raythurman2386/ravenbot/internal/config"
 	"github.com/raythurman2386/ravenbot/internal/db"
+	"net/http"
+	"net/http/httptest"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
