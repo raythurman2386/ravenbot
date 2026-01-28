@@ -16,15 +16,15 @@
 ## 🚀 Phase 7: Multi-Channel Messaging (MVP Core)
 *Objective: Get RavenBot out of log files and into your pocket.*
 
-- [ ] **Notifier Interface**: Define a generic `Notifier` interface to support multiple platforms.
-- [ ] **Telegram Integration**:
-    - [ ] Integrate `go-telegram-bot-api`.
-    - [ ] Implement `TelegramNotifier` to send daily Markdown briefings.
-    - [ ] Add `TELEGRAM_BOT_TOKEN` and `TELEGRAM_CHAT_ID` to config.
-- [ ] **Discord Integration**:
-    - [ ] Integrate `discordgo`.
-    - [ ] Implement `DiscordNotifier`.
-    - [ ] Add `DISCORD_BOT_TOKEN` and `DISCORD_CHANNEL_ID` to config.
+- [x] **Notifier Interface**: Define a generic `Notifier` interface to support multiple platforms.
+- [x] **Telegram Integration**:
+    - [x] Integrate `go-telegram-bot-api`.
+    - [x] Implement `TelegramNotifier` to send daily Markdown briefings.
+    - [x] Add `TELEGRAM_BOT_TOKEN` and `TELEGRAM_CHAT_ID` to config.
+- [x] **Discord Integration**:
+    - [x] Integrate `discordgo`.
+    - [x] Implement `DiscordNotifier`.
+    - [x] Add `DISCORD_BOT_TOKEN` and `DISCORD_CHANNEL_ID` to config.
 
 ---
 
@@ -60,6 +60,6 @@
 ---
 
 ## 📦 MVP Release Target
-- [ ] **Daily Briefing** delivered to Telegram/Discord.
+- [x] **Daily Briefing** delivered to Telegram/Discord.
 - [ ] **One-Shot Research** triggered via chat command.
 - [ ] **Persistent Memory** of the last 7 days of news.
