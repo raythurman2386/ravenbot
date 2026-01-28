@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"os"
 	"time"
 
 	"github.com/chromedp/chromedp"
@@ -21,6 +22,11 @@ func BrowseWeb(ctx context.Context, url string) (string, error) {
 		chromedp.DisableGPU,
 		chromedp.Flag("headless", true),
 	)
+
+	// Use CHROME_BIN environment variable if set (for Docker/Alpine)
+	if chromeBin := os.Getenv("CHROME_BIN"); chromeBin != "" {
+		opts = append(opts, chromedp.ExecPath(chromeBin))
+	}
 
 	allocCtx, allocCancel := chromedp.NewExecAllocator(ctx, opts...)
 	defer allocCancel()

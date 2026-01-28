@@ -9,7 +9,7 @@ Equipped with a **Gemini 3 Pro** brain, RavenBot can browse the web, execute sys
 ## 🚀 Key Features
 
 ### 🧠 Advanced Intelligence
-- **Native AI Power**: Driven by Google's `gemini-3-pro-preview` with native function calling and multi-turn reasoning.
+- **Native AI Power**: Driven by Google's `gemini-3-flash-preview` with native function calling and multi-turn reasoning.
 - **Smart Tools**: Equipped with a professional toolbelt:
   - **FetchRSS**: Real-time news gathering from technical sources.
   - **ScrapePage**: High-fidelity text extraction from technical articles.

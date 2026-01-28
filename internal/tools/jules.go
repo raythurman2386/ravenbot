@@ -6,25 +6,60 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"strings"
 	"time"
 )
 
-// JulesTask represents the payload for creating a Jules session.
-type JulesTask struct {
-	Source string `json:"source"`
-	Prompt string `json:"prompt"`
+// GithubRepoContext provides context for a GitHub repository.
+type GithubRepoContext struct {
+	StartingBranch string `json:"startingBranch,omitempty"`
+}
+
+// SourceContext specifies the source repository for a Jules session.
+type SourceContext struct {
+	Source            string             `json:"source"`
+	GithubRepoContext *GithubRepoContext `json:"githubRepoContext,omitempty"`
+}
+
+// JulesSessionRequest represents the payload for creating a Jules session.
+type JulesSessionRequest struct {
+	Prompt              string        `json:"prompt"`
+	SourceContext       SourceContext `json:"sourceContext"`
+	Title               string        `json:"title,omitempty"`
+	RequirePlanApproval bool          `json:"requirePlanApproval,omitempty"`
+	AutomationMode      string        `json:"automationMode,omitempty"`
 }
 
 // DelegateToJules calls the alpha Jules Agent API to perform a repository task.
+// The repo should be in the format "owner/repo" (e.g., "raythurman2386/RavenBot").
+// Note: The repository must be connected to Jules via https://jules.google first.
 func DelegateToJules(ctx context.Context, apiKey, repo, task string) (string, error) {
 	if apiKey == "" {
 		return "", fmt.Errorf("JULES_API_KEY is not set")
 	}
 
+	// Parse owner/repo format
+	parts := strings.Split(repo, "/")
+	if len(parts) != 2 {
+		return "", fmt.Errorf("invalid repo format, expected 'owner/repo', got: %s", repo)
+	}
+	owner, repoName := parts[0], parts[1]
+
 	url := "https://jules.googleapis.com/v1alpha/sessions"
-	payload := JulesTask{
-		Source: repo,
+
+	// Build the proper request payload
+	// Source format: sources/github/{owner}/{repo}
+	payload := JulesSessionRequest{
 		Prompt: task,
+		SourceContext: SourceContext{
+			Source: fmt.Sprintf("sources/github/%s/%s", owner, repoName),
+			GithubRepoContext: &GithubRepoContext{
+				StartingBranch: "main",
+			},
+		},
+		Title:               fmt.Sprintf("RavenBot Task: %s", truncateString(task, 50)),
+		RequirePlanApproval: false, // Auto-approve for autonomous operation
+		AutomationMode:      "AUTO_CREATE_PR",
 	}
 
 	jsonData, err := json.Marshal(payload)
@@ -47,15 +82,38 @@ func DelegateToJules(ctx context.Context, apiKey, repo, task string) (string, er
 	}
 	defer resp.Body.Close()
 
-	if resp.StatusCode != http.StatusCreated && resp.StatusCode != http.StatusOK {
-		return "", fmt.Errorf("jules api returned status: %s", resp.Status)
-	}
-
+	// Read response body for error details
 	var result map[string]any
 	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
 		return "", fmt.Errorf("failed to decode jules response: %w", err)
 	}
 
-	sessionID := result["name"].(string)
-	return fmt.Sprintf("Jules task initiated successfully. Session ID: %s", sessionID), nil
+	if resp.StatusCode != http.StatusCreated && resp.StatusCode != http.StatusOK {
+		// Try to extract error message from response
+		if errMsg, ok := result["error"].(map[string]any); ok {
+			if msg, ok := errMsg["message"].(string); ok {
+				// Provide helpful context for common errors
+				if strings.Contains(msg, "not found") {
+					return "", fmt.Errorf("jules api error: %s (Hint: Make sure the repo is connected at https://jules.google)", msg)
+				}
+				return "", fmt.Errorf("jules api error: %s", msg)
+			}
+		}
+		return "", fmt.Errorf("jules api returned status: %s", resp.Status)
+	}
+
+	sessionName, ok := result["name"].(string)
+	if !ok {
+		return "", fmt.Errorf("jules response missing session name")
+	}
+
+	return fmt.Sprintf("Jules task initiated successfully. Session: %s", sessionName), nil
+}
+
+// truncateString truncates a string to the specified length.
+func truncateString(s string, maxLen int) string {
+	if len(s) <= maxLen {
+		return s
+	}
+	return s[:maxLen-3] + "..."
 }

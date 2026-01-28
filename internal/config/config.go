@@ -35,5 +35,6 @@ func LoadConfig() (*Config, error) {
 		TelegramChatID:   chatID,
 		DiscordBotToken:  os.Getenv("DISCORD_BOT_TOKEN"),
 		DiscordChannelID: os.Getenv("DISCORD_CHANNEL_ID"),
+		JulesAPIKey:      os.Getenv("JULES_API_KEY"),
 	}, nil
 }

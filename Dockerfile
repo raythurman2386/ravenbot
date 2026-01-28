@@ -19,8 +19,20 @@ RUN CGO_ENABLED=0 GOOS=linux go build -o ravenbot ./cmd/bot/main.go
 # Final stage
 FROM alpine:latest
 
-# Install certificates for HTTPS requests and timezone data
-RUN apk add --no-cache ca-certificates tzdata
+# Install certificates, timezone data, and Chromium for headless browsing
+RUN apk add --no-cache \
+    ca-certificates \
+    tzdata \
+    chromium \
+    chromium-chromedriver \
+    nss \
+    freetype \
+    harfbuzz \
+    ttf-freefont
+
+# Set Chrome path for chromedp
+ENV CHROME_BIN=/usr/bin/chromium-browser
+ENV CHROMEDP_NO_SANDBOX=true
 
 WORKDIR /app
 
