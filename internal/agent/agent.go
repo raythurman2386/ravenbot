@@ -1,0 +1,114 @@
+package agent
+
+import (
+	"context"
+	"fmt"
+	"ravenbot/internal/config"
+	"strings"
+
+	"google.golang.org/genai"
+)
+
+type Agent struct {
+	client *genai.Client
+	cfg    *config.Config
+}
+
+func NewAgent(ctx context.Context, cfg *config.Config) (*Agent, error) {
+	client, err := genai.NewClient(ctx, &genai.ClientConfig{
+		APIKey:  cfg.GeminiAPIKey,
+		Backend: genai.BackendGeminiAPI,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("failed to create GenAI client: %w", err)
+	}
+
+	return &Agent{
+		client: client,
+		cfg:    cfg,
+	}, nil
+}
+
+func (a *Agent) RunMission(ctx context.Context, prompt string) (string, error) {
+	model := "gemini-3.0-flash"
+
+	// Create a new session for multi-turn interaction
+	chat, err := a.client.Chats.Create(ctx, model, &genai.GenerateContentConfig{
+		Tools: RavenTools,
+		SystemInstruction: &genai.Content{
+			Parts: []*genai.Part{
+				{Text: `You are RavenBot, a sophisticated technical research assistant. 
+Your goal is to generate a high-quality, structured daily newsletter in Markdown format.
+Focus on the following topics:
+1. Golang & Python: New releases, performance optimizations, and popular libraries.
+2. Geospatial Engineering: USGS, Mapbox, Google Earth Engine, and GIS trends.
+3. AI/LLM: Latest models, agentic workflows, and ethical AI developments.
+
+Formatting Requirements:
+- Use a clear # Title with the date.
+- Use ## Sections for each major topic.
+- Provide [Source Name](link) for all news items.
+- Summarize each item in 2-3 concise bullet points.
+- Ensure the tone is professional yet engaging.`},
+			},
+		},
+	}, nil)
+	if err != nil {
+		return "", fmt.Errorf("failed to create chat session: %w", err)
+	}
+
+	resp, err := chat.SendMessage(ctx, genai.Part{Text: prompt})
+	if err != nil {
+		return "", fmt.Errorf("failed to send initial message: %w", err)
+	}
+
+	for {
+		// Check for function calls in the last candidate
+		if len(resp.Candidates) == 0 || len(resp.Candidates[0].Content.Parts) == 0 {
+			break
+		}
+
+		var toolResponses []genai.Part
+		hasCalls := false
+
+		for _, part := range resp.Candidates[0].Content.Parts {
+			if part.FunctionCall != nil {
+				hasCalls = true
+				result, err := HandleToolCall(ctx, part.FunctionCall)
+				if err != nil {
+					return "", fmt.Errorf("tool call %s failed: %w", part.FunctionCall.Name, err)
+				}
+
+				toolResponses = append(toolResponses, genai.Part{
+					FunctionResponse: &genai.FunctionResponse{
+						Name:     part.FunctionCall.Name,
+						Response: map[string]any{"result": result},
+					},
+				})
+			}
+		}
+
+		if !hasCalls {
+			break
+		}
+
+		// Send tool results back to the model
+		resp, err = chat.SendMessage(ctx, toolResponses...)
+		if err != nil {
+			return "", fmt.Errorf("failed to send tool responses: %w", err)
+		}
+	}
+
+	// Return the final text response
+	if len(resp.Candidates) > 0 && len(resp.Candidates[0].Content.Parts) > 0 {
+		var finalParts []string
+		for _, part := range resp.Candidates[0].Content.Parts {
+			if part.Text != "" {
+				finalParts = append(finalParts, part.Text)
+			}
+		}
+		return strings.Join(finalParts, "\n"), nil
+	}
+
+	return "", fmt.Errorf("no response from Gemini")
+}

@@ -1,0 +1,12 @@
+# Binaries
+/ravenbot
+main
+
+# OS Files
+.DS_Store
+
+# Environment
+.env
+
+# Logs/Artifacts
+/daily_logs/

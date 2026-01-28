@@ -1,0 +1,13 @@
+services:
+  ravenbot:
+    build: .
+    restart: always
+    environment:
+      - GEMINI_API_KEY=${GEMINI_API_KEY}
+    volumes:
+      - ./daily_logs:/app/daily_logs
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
