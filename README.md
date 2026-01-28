@@ -1,61 +1,91 @@
-# RavenBot 🦅
+# 🦅 RavenBot: Autonomous Technical Research Agent
 
-RavenBot is a self-hosted, autonomous AI Research Agent built in Go (1.25+). It monitors technical news across various domains and generates a daily briefing using Gemini 3.0 Flash.
+RavenBot is a high-performance, self-hosted autonomous AI agent built in **Go 1.25+**. It functions as a proactive technical assistant that researches the latest trends in Golang, AI/LLM, and Geospatial Engineering, delivering high-quality briefings directly to your pocket.
 
-## 🚀 Features
+Equipped with a **Gemini 3 Pro** brain, RavenBot can browse the web, execute system commands, and even delegate complex repository tasks to the **Gemini Jules Agent**.
 
-- **Autonomous Research**: Uses Gemini 3.0 Flash with native function calling to research topics.
-- **Smart Tools**: Equipped with RSS fetchers and web scrapers to gather real-time data.
-- **Scheduled Briefings**: Uses `CronLib` to generate and save a daily technical newsletter at 6:00 AM.
-- **Dockerized**: Optimized for deployment on Raspberry Pi 5 (ARM64) using multi-stage builds.
+---
+
+## 🚀 Key Features
+
+### 🧠 Advanced Intelligence
+- **Native AI Power**: Driven by Google's `gemini-3-pro-preview` with native function calling and multi-turn reasoning.
+- **Smart Tools**: Equipped with a professional toolbelt:
+  - **FetchRSS**: Real-time news gathering from technical sources.
+  - **ScrapePage**: High-fidelity text extraction from technical articles.
+  - **BrowseWeb**: A headless browser pilot (`chromedp`) for JS-heavy dynamic websites.
+  - **ShellExecute**: Restricted local execution for system monitoring (df, free, uptime).
+
+### 💬 Multi-Channel & Interactive
+- **Proactive Heartbeat**: Automated daily technical newsletters scheduled via `CronLib`.
+- **Two-Way Comms**: Interactive listeners for **Telegram**, **Discord**, and **CLI**.
+  - `/research <topic>` - Trigger a deep-dive research mission on any subject.
+  - `/jules <repo> <task>` - Delegate complex coding or repository tasks to the **Jules Agent API**.
+- **Secure by Design**: Restricted message processing to authorized Chat/Channel IDs.
+
+### 💾 Persistence & Memory
+- **SQLite Engine**: Tracks headlines to ensure you never receive duplicate news.
+- **RAG-Ready**: Persists daily briefings for historical reference and future trend analysis.
+
+---
 
 ## 🛠 Tech Stack
 
-- **Language**: Go 1.25
-- **AI SDK**: `google.golang.org/genai` (Gemini 3.0 Flash)
-- **Scheduler**: `github.com/raythurman2386/cronlib`
-- **Data Source**: Custom RSS and Web Scraping tools
-- **Infrastructure**: Docker & Docker Compose (ARM64 support)
+- **Core**: Go 1.25+
+- **Brain**: [google.golang.org/genai](https://github.com/googleapis/go-genai) (Gemini 3 Pro)
+- **Scheduler**: [github.com/raythurman2386/cronlib](https://github.com/raythurman2386/cronlib)
+- **Browser**: `chromedp`
+- **Database**: `modernc.org/sqlite` (CGO-free)
+- **Infrastructure**: Docker & Docker Compose (Optimized for ARM64/Raspberry Pi 5)
 
-## 📋 Prerequisites
+---
 
-- Go 1.25+
+## 📋 Getting Started
+
+### 1. Prerequisites
 - Docker & Docker Compose
 - Google Gemini API Key
+- (Optional) Telegram Bot Token & Chat ID
+- (Optional) Discord Bot Token & Channel ID
+- (Optional) Jules Agent API Key
 
-## 🛠 Setup
+### 2. Deployment (Docker)
+RavenBot is designed to run 24/7 in a lightweight Docker container.
 
-### 1. Clone the repository
 ```bash
+# Clone the repository
 git clone https://github.com/raythurman2386/RavenBot.git
 cd RavenBot
-```
 
-### 2. Configure Environment Variables
-Create a `.env` file based on the example:
-```bash
+# Set up your environment
 cp .env.example .env
-```
-Edit `.env` and add your `GEMINI_API_KEY`.
+# Edit .env with your keys
 
-### 3. Run Locally
-```bash
-export GEMINI_API_KEY=your_key_here
-go run cmd/bot/main.go
+# Launch the agent
+docker compose up -d --build
 ```
 
-### 4. Deploy with Docker
+### 3. Interactive Mode (CLI)
+If you aren't using messaging apps, you can interact with RavenBot directly through the container terminal:
+
 ```bash
-docker-compose up -d
+docker attach ravenbot-ravenbot-1
+# Then type:
+/research Go 1.26 performance
 ```
+
+---
 
 ## 📁 Project Structure
 
-- `cmd/bot/`: Application entry point.
-- `internal/agent/`: Gemini agent logic and function calling loop.
-- `internal/tools/`: Scraper and RSS utilities.
-- `internal/config/`: Environment variable management.
-- `daily_logs/`: Directory where daily Markdown reports are saved.
+- `cmd/bot/`: Main application entry point and interactive loop.
+- `internal/agent/`: Core agent logic, function calling, and persona management.
+- `internal/tools/`: Implementation of the Agent's toolset (Web, RSS, Shell, Browser, Jules).
+- `internal/db/`: Persistence layer for headlines and briefings.
+- `internal/notifier/`: Messaging integrations for Telegram and Discord.
+- `daily_logs/`: Local storage for generated Markdown reports.
+
+---
 
 ## 📜 License
-MIT
+MIT – Build something great! 🦅
