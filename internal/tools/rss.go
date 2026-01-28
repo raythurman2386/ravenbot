@@ -17,7 +17,8 @@ func FetchRSS(ctx context.Context, url string) ([]RSSItem, error) {
 	fp := gofeed.NewParser()
 	feed, err := fp.ParseURLWithContext(url, ctx)
 	if err != nil {
-		return nil, fmt.Errorf("failed to parse RSS feed from %s: %w", url, err)
+		// If it's a 404 or other HTTP error, we want the agent to know so it can try another URL.
+		return nil, fmt.Errorf("RSS source at %s returned an error: %w", url, err)
 	}
 
 	var items []RSSItem

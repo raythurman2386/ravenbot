@@ -6,7 +6,7 @@
 
 ## ✅ Completed Foundations
 - [x] **Skeleton**: Go 1.25 project structure.
-- [x] **Brain**: Gemini 3.0 Flash with Function Calling.
+- [x] **Brain**: Gemini 3 Flash with Function Calling.
 - [x] **Tools**: Scraping & RSS foundations.
 - [x] **Heartbeat**: CronLib daily scheduling (06:00 AM).
 - [x] **Deployment**: Docker/Compose for ARM64 (Raspberry Pi 5).
@@ -55,8 +55,11 @@
 ## 🛠 Phase 10: System & Web Power (Advanced "Clawd" Skills)
 *Objective: Give the agent "hands" to interact with the host and web.*
 
-- [ ] **Executor Tool**: Implement a restricted `ShellExecute` tool for system stats and basic tasks.
-- [ ] **Web Pilot**: Integrate `chromedp` to allow the agent to log into sites or handle dynamic JS-heavy research.
+- [x] **Executor Tool**: Implement a restricted `ShellExecute` tool for system stats and basic tasks.
+- [x] **Web Pilot**: Integrate `chromedp` to allow the agent to log into sites or handle dynamic JS-heavy research.
+- [x] **Jules Integration**: 
+    - [x] Integrate Gemini Jules Agent API for autonomous repository tasks.
+    - [x] Enable `/jules <repo> <task>` command to delegate coding work.
 
 ---
 

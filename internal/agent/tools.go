@@ -39,6 +39,57 @@ var RavenTools = []*genai.Tool{
 					Required: []string{"url"},
 				},
 			},
+			{
+				Name:        "ShellExecute",
+				Description: "Executes a restricted set of shell commands (df, free, uptime, whoami, date, ls).",
+				Parameters: &genai.Schema{
+					Type: genai.TypeObject,
+					Properties: map[string]*genai.Schema{
+						"command": {
+							Type:        genai.TypeString,
+							Description: "The command to run.",
+						},
+						"args": {
+							Type:        genai.TypeArray,
+							Items:       &genai.Schema{Type: genai.TypeString},
+							Description: "The arguments for the command.",
+						},
+					},
+					Required: []string{"command"},
+				},
+			},
+			{
+				Name:        "BrowseWeb",
+				Description: "Navigates to a URL using a headless browser to extract content from JS-heavy sites.",
+				Parameters: &genai.Schema{
+					Type: genai.TypeObject,
+					Properties: map[string]*genai.Schema{
+						"url": {
+							Type:        genai.TypeString,
+							Description: "The URL of the webpage to browse.",
+						},
+					},
+					Required: []string{"url"},
+				},
+			},
+			{
+				Name:        "JulesTask",
+				Description: "Delegates a complex coding or repository task to the Gemini Jules Agent.",
+				Parameters: &genai.Schema{
+					Type: genai.TypeObject,
+					Properties: map[string]*genai.Schema{
+						"repo": {
+							Type:        genai.TypeString,
+							Description: "The GitHub repository (e.g., owner/repo).",
+						},
+						"task": {
+							Type:        genai.TypeString,
+							Description: "The description of the coding task to perform.",
+						},
+					},
+					Required: []string{"repo", "task"},
+				},
+			},
 		},
 	},
 }
@@ -76,6 +127,24 @@ func (a *Agent) handleToolCall(ctx context.Context, call *genai.FunctionCall) (a
 	case "ScrapePage":
 		url := call.Args["url"].(string)
 		return tools.ScrapePage(ctx, url)
+	case "ShellExecute":
+		command := call.Args["command"].(string)
+		var args []string
+		if rawArgs, ok := call.Args["args"].([]any); ok {
+			for _, arg := range rawArgs {
+				if s, ok := arg.(string); ok {
+					args = append(args, s)
+				}
+			}
+		}
+		return tools.ShellExecute(ctx, command, args)
+	case "BrowseWeb":
+		url := call.Args["url"].(string)
+		return tools.BrowseWeb(ctx, url)
+	case "JulesTask":
+		repo := call.Args["repo"].(string)
+		task := call.Args["task"].(string)
+		return tools.DelegateToJules(ctx, a.cfg.JulesAPIKey, repo, task)
 	default:
 		return nil, nil
 	}

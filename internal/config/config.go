@@ -12,6 +12,7 @@ type Config struct {
 	TelegramChatID   int64
 	DiscordBotToken  string
 	DiscordChannelID string
+	JulesAPIKey      string
 }
 
 func LoadConfig() (*Config, error) {

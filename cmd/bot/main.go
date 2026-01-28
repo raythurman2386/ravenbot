@@ -120,6 +120,36 @@ func main() {
 		reply(report)
 	}
 
+	// Jules Command Processor
+	processJules := func(text string, reply func(string)) {
+		if !strings.HasPrefix(text, "/jules") {
+			return
+		}
+
+		parts := strings.Fields(strings.TrimPrefix(text, "/jules"))
+		if len(parts) < 2 {
+			reply("Usage: /jules <owner/repo> <task description>")
+			return
+		}
+
+		repo := parts[0]
+		task := strings.Join(parts[1:], " ")
+
+		reply(fmt.Sprintf("Delegating task to Jules for %s: %s", repo, task))
+
+		// We use the agent's HandleToolCall logic but triggered directly
+		// However, it's cleaner to just call the tool directly here or let the agent handle it.
+		// For now, let's keep it consistent with the agent's tool set.
+		// Actually, let's just use the agent to handle it so it can reason about the response.
+		prompt := fmt.Sprintf("Delegate the following task to Jules for the repository %s: %s", repo, task)
+		res, err := bot.RunMission(ctx, prompt)
+		if err != nil {
+			reply(fmt.Sprintf("Jules delegation failed: %v", err))
+			return
+		}
+		reply(res)
+	}
+
 	// Start Notifier Listeners
 	for _, n := range notifiers {
 		switch botNotifier := n.(type) {
@@ -130,10 +160,20 @@ func main() {
 						log.Printf("Failed to send Telegram reply: %v", err)
 					}
 				})
+				processJules(text, func(reply string) {
+					if err := botNotifier.Send(ctx, reply); err != nil {
+						log.Printf("Failed to send Telegram reply: %v", err)
+					}
+				})
 			})
 		case *notifier.DiscordNotifier:
 			go botNotifier.StartListener(ctx, func(channelID string, text string) {
 				processCommand(text, func(reply string) {
+					if err := botNotifier.Send(ctx, reply); err != nil {
+						log.Printf("Failed to send Discord reply: %v", err)
+					}
+				})
+				processJules(text, func(reply string) {
 					if err := botNotifier.Send(ctx, reply); err != nil {
 						log.Printf("Failed to send Discord reply: %v", err)
 					}
@@ -151,11 +191,14 @@ func main() {
 			processCommand(text, func(reply string) {
 				log.Printf("\n--- RavenBot Response ---\n%s\n------------------------\n", reply)
 			})
+			processJules(text, func(reply string) {
+				log.Printf("\n--- Jules Delegation Response ---\n%s\n------------------------\n", reply)
+			})
 		}
 	}()
 
-	// Schedule the job: 0 30 20 * * * (20:30:00 Daily)
-	_, err = scheduler.AddJobWithOptions("0 30 20 * * *", missionFunc, cronlib.JobOptions{
+	// Schedule the job: 0 50 20 * * * (20:50:00 Daily)
+	_, err = scheduler.AddJobWithOptions("0 50 20 * * *", missionFunc, cronlib.JobOptions{
 		Overlap: cronlib.OverlapForbid, // Skip if previous one is still running
 	})
 	if err != nil {
@@ -163,7 +206,7 @@ func main() {
 	}
 
 	scheduler.Start()
-	log.Println("RavenBot started. Scheduled mission at 20:30 Daily.")
+	log.Println("RavenBot started. Scheduled mission at 20:50 Daily.")
 
 	// Handle graceful shutdown
 	sigChan := make(chan os.Signal, 1)

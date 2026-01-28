@@ -33,7 +33,7 @@ func NewAgent(ctx context.Context, cfg *config.Config, database *db.DB) (*Agent,
 }
 
 func (a *Agent) RunMission(ctx context.Context, prompt string) (string, error) {
-	model := "gemini-3.0-flash"
+	model := "gemini-3-pro-preview"
 
 	// Create a new session for multi-turn interaction
 	chat, err := a.client.Chats.Create(ctx, model, &genai.GenerateContentConfig{
