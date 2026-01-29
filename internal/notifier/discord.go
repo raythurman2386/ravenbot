@@ -3,6 +3,7 @@ package notifier
 import (
 	"context"
 	"fmt"
+	"log/slog"
 
 	"github.com/bwmarrin/discordgo"
 )
@@ -60,7 +61,8 @@ func (d *DiscordNotifier) StartListener(ctx context.Context, handler func(channe
 	})
 
 	if err := d.session.Open(); err != nil {
-		return // Log this in main
+		slog.Error("Failed to open discord session", "error", err)
+		return
 	}
 
 	<-ctx.Done()

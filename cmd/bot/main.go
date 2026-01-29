@@ -4,11 +4,7 @@ import (
 	"bufio"
 	"context"
 	"fmt"
-	"github.com/raythurman2386/ravenbot/internal/agent"
-	"github.com/raythurman2386/ravenbot/internal/config"
-	"github.com/raythurman2386/ravenbot/internal/db"
-	"github.com/raythurman2386/ravenbot/internal/notifier"
-	"log"
+	"log/slog"
 	"os"
 	"os/signal"
 	"strings"
@@ -16,6 +12,10 @@ import (
 	"time"
 
 	"github.com/raythurman2386/cronlib"
+	"github.com/raythurman2386/ravenbot/internal/agent"
+	"github.com/raythurman2386/ravenbot/internal/config"
+	"github.com/raythurman2386/ravenbot/internal/db"
+	"github.com/raythurman2386/ravenbot/internal/notifier"
 )
 
 const helpMessage = `🐦 **ravenbot Commands**
@@ -41,20 +41,27 @@ func main() {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
+	// Initialize structured logger
+	logger := slog.New(slog.NewJSONHandler(os.Stdout, nil))
+	slog.SetDefault(logger)
+
 	cfg, err := config.LoadConfig()
 	if err != nil {
-		log.Fatalf("Failed to load config: %v", err)
+		slog.Error("Failed to load config", "error", err)
+		os.Exit(1)
 	}
 
 	database, err := db.InitDB("data/ravenbot.db")
 	if err != nil {
-		log.Fatalf("Failed to initialize database: %v", err)
+		slog.Error("Failed to initialize database", "error", err)
+		os.Exit(1)
 	}
 	defer database.Close()
 
 	bot, err := agent.NewAgent(ctx, cfg, database)
 	if err != nil {
-		log.Fatalf("Failed to create agent: %v", err)
+		slog.Error("Failed to create agent", "error", err)
+		os.Exit(1)
 	}
 
 	scheduler := cronlib.NewCron()
@@ -65,7 +72,7 @@ func main() {
 	if cfg.TelegramBotToken != "" && cfg.TelegramChatID != 0 {
 		tn, err := notifier.NewTelegramNotifier(cfg.TelegramBotToken, cfg.TelegramChatID)
 		if err != nil {
-			log.Printf("Warning: Failed to setup Telegram notifier: %v", err)
+			slog.Warn("Failed to setup Telegram notifier", "error", err)
 		} else {
 			notifiers = append(notifiers, tn)
 		}
@@ -74,7 +81,7 @@ func main() {
 	if cfg.DiscordBotToken != "" && cfg.DiscordChannelID != "" {
 		dn, err := notifier.NewDiscordNotifier(cfg.DiscordBotToken, cfg.DiscordChannelID)
 		if err != nil {
-			log.Printf("Warning: Failed to setup Discord notifier: %v", err)
+			slog.Warn("Failed to setup Discord notifier", "error", err)
 		} else {
 			notifiers = append(notifiers, dn)
 		}
@@ -82,7 +89,7 @@ func main() {
 
 	// Daily Mission at 7:00 AM
 	missionFunc := func(ctx context.Context) {
-		log.Println("Starting scheduled mission...")
+		slog.Info("Starting scheduled mission")
 		today := time.Now().Format("Monday, January 2, 2006")
 		prompt := fmt.Sprintf("Today is %s. Research the latest technical news in Golang, Python, Geospatial Engineering, and AI/LLM. "+
 			"IMPORTANT: potentially use search queries that include the date or 'last 24 hours' to ensure you find news from today or yesterday. "+
@@ -90,23 +97,23 @@ func main() {
 
 		report, err := bot.RunMission(ctx, prompt)
 		if err != nil {
-			log.Printf("Mission failed: %v", err)
+			slog.Error("Mission failed", "error", err)
 			return
 		}
 
 		path, err := agent.SaveReport("daily_logs", report)
 		if err != nil {
-			log.Printf("Failed to save report: %v", err)
+			slog.Error("Failed to save report", "error", err)
 			return
 		}
 
-		log.Printf("Mission completed. Report saved to: %s", path)
+		slog.Info("Mission completed", "path", path)
 
 		for _, n := range notifiers {
 			if err := n.Send(ctx, report); err != nil {
-				log.Printf("Failed to send report to %s: %v", n.Name(), err)
+				slog.Error("Failed to send report", "notifier", n.Name(), "error", err)
 			} else {
-				log.Printf("Report sent to %s", n.Name())
+				slog.Info("Report sent", "notifier", n.Name())
 			}
 		}
 	}
@@ -154,7 +161,7 @@ func main() {
 				return
 			}
 			if err := database.SaveBriefing(ctx, report); err != nil {
-				log.Printf("Failed to save briefing: %v", err)
+				slog.Error("Failed to save briefing", "error", err)
 			}
 			reply(report)
 			return
@@ -196,7 +203,7 @@ func main() {
 				sessionID := fmt.Sprintf("telegram-%d", chatID)
 				handleMessage(sessionID, text, func(reply string) {
 					if err := botNotifier.Send(ctx, reply); err != nil {
-						log.Printf("Failed to send Telegram reply: %v", err)
+						slog.Error("Failed to send Telegram reply", "error", err)
 					}
 				})
 			})
@@ -205,7 +212,7 @@ func main() {
 				sessionID := fmt.Sprintf("discord-%s", channelID)
 				handleMessage(sessionID, text, func(reply string) {
 					if err := botNotifier.Send(ctx, reply); err != nil {
-						log.Printf("Failed to send Discord reply: %v", err)
+						slog.Error("Failed to send Discord reply", "error", err)
 					}
 				})
 			})
@@ -231,20 +238,21 @@ func main() {
 		Overlap: cronlib.OverlapForbid,
 	})
 	if err != nil {
-		log.Fatalf("Failed to schedule mission: %v", err)
+		slog.Error("Failed to schedule mission", "error", err)
+		os.Exit(1)
 	}
 
 	scheduler.Start()
-	log.Printf("ravenbot started. Time: %s", time.Now().Format("15:04:05"))
-	log.Println("Scheduled daily briefing at 07:00")
+	slog.Info("ravenbot started", "time", time.Now().Format("15:04:05"))
+	slog.Info("Scheduled daily briefing at 07:00")
 
 	// Graceful shutdown
 	sigChan := make(chan os.Signal, 1)
 	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
 
 	<-sigChan
-	log.Println("Shutting down ravenbot...")
+	slog.Info("Shutting down ravenbot...")
 	scheduler.Stop()
 	cancel()
-	log.Println("ravenbot stopped gracefully.")
+	slog.Info("ravenbot stopped gracefully.")
 }

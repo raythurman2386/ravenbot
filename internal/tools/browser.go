@@ -3,7 +3,7 @@ package tools
 import (
 	"context"
 	"fmt"
-	"log"
+	"log/slog"
 	"os"
 	"time"
 
@@ -32,7 +32,9 @@ func BrowseWeb(ctx context.Context, url string) (string, error) {
 	defer allocCancel()
 
 	// Create chromedp context
-	browserCtx, browserCancel := chromedp.NewContext(allocCtx, chromedp.WithLogf(log.Printf))
+	browserCtx, browserCancel := chromedp.NewContext(allocCtx, chromedp.WithLogf(func(format string, args ...interface{}) {
+		slog.Debug(fmt.Sprintf(format, args...), "component", "chromedp")
+	}))
 	defer browserCancel()
 
 	var content string
