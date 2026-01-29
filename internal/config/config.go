@@ -2,7 +2,7 @@ package config
 
 import (
 	"fmt"
-	"log"
+	"log/slog"
 	"os"
 )
 
@@ -25,7 +25,7 @@ func LoadConfig() (*Config, error) {
 	var chatID int64
 	if cid := os.Getenv("TELEGRAM_CHAT_ID"); cid != "" {
 		if _, err := fmt.Sscanf(cid, "%d", &chatID); err != nil {
-			log.Printf("Warning: Invalid TELEGRAM_CHAT_ID: %v", err)
+			slog.Error("Failed to parse TELEGRAM_CHAT_ID", "error", err)
 		}
 	}
 
