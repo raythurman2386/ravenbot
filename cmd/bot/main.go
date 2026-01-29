@@ -83,7 +83,10 @@ func main() {
 	// Daily Mission at 7:00 AM
 	missionFunc := func(ctx context.Context) {
 		log.Println("Starting scheduled mission...")
-		prompt := "Research the latest technical news in Golang, Python, Geospatial Engineering, and AI/LLM. Generate a detailed daily briefing in Markdown format."
+		today := time.Now().Format("Monday, January 2, 2006")
+		prompt := fmt.Sprintf("Today is %s. Research the latest technical news in Golang, Python, Geospatial Engineering, and AI/LLM. "+
+			"IMPORTANT: potentially use search queries that include the date or 'last 24 hours' to ensure you find news from today or yesterday. "+
+			"Do not report on old news. Generate a detailed daily briefing in Markdown format.", today)
 
 		report, err := bot.RunMission(ctx, prompt)
 		if err != nil {
