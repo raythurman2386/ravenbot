@@ -1,10 +1,16 @@
 package config
 
 import (
+	"encoding/json"
 	"fmt"
 	"log/slog"
 	"os"
 )
+
+type MCPServerConfig struct {
+	Command string   `json:"command"`
+	Args    []string `json:"args"`
+}
 
 type Config struct {
 	GeminiAPIKey     string
@@ -13,6 +19,7 @@ type Config struct {
 	DiscordBotToken  string
 	DiscordChannelID string
 	JulesAPIKey      string
+	MCPServers       map[string]MCPServerConfig `json:"mcpServers"`
 }
 
 func LoadConfig() (*Config, error) {
@@ -21,20 +28,31 @@ func LoadConfig() (*Config, error) {
 		return nil, fmt.Errorf("GEMINI_API_KEY environment variable is not set")
 	}
 
+	cfg := &Config{
+		GeminiAPIKey:     apiKey,
+		TelegramBotToken: os.Getenv("TELEGRAM_BOT_TOKEN"),
+		DiscordBotToken:  os.Getenv("DISCORD_BOT_TOKEN"),
+		DiscordChannelID: os.Getenv("DISCORD_CHANNEL_ID"),
+		JulesAPIKey:      os.Getenv("JULES_API_KEY"),
+	}
+
+	// Load MCPServers from config.json if it exists
+	if file, err := os.Open("config.json"); err == nil {
+		defer file.Close()
+		decoder := json.NewDecoder(file)
+		if err := decoder.Decode(cfg); err != nil {
+			slog.Warn("Failed to parse config.json", "error", err)
+		}
+	}
+
 	// Optional configurations for notifiers
 	var chatID int64
 	if cid := os.Getenv("TELEGRAM_CHAT_ID"); cid != "" {
 		if _, err := fmt.Sscanf(cid, "%d", &chatID); err != nil {
 			slog.Error("Failed to parse TELEGRAM_CHAT_ID", "error", err)
 		}
+		cfg.TelegramChatID = chatID
 	}
 
-	return &Config{
-		GeminiAPIKey:     apiKey,
-		TelegramBotToken: os.Getenv("TELEGRAM_BOT_TOKEN"),
-		TelegramChatID:   chatID,
-		DiscordBotToken:  os.Getenv("DISCORD_BOT_TOKEN"),
-		DiscordChannelID: os.Getenv("DISCORD_CHANNEL_ID"),
-		JulesAPIKey:      os.Getenv("JULES_API_KEY"),
-	}, nil
+	return cfg, nil
 }

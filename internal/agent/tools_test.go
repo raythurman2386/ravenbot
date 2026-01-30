@@ -61,7 +61,7 @@ func TestHandleToolCall(t *testing.T) {
 			Name: "UnknownTool",
 		}
 		result, err := a.handleToolCall(ctx, call)
-		assert.NoError(t, err)
+		assert.Error(t, err)
 		assert.Nil(t, result)
 	})
 }

@@ -12,3 +12,4 @@ main
 /daily_logs/
 data/*.db
 data/*.db-*
+config.json

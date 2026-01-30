@@ -14,7 +14,6 @@ var AllowedCommands = map[string]bool{
 	"uptime": true,
 	"whoami": true,
 	"date":   true,
-	"ls":     true,
 }
 
 // ShellExecute runs a restricted set of shell commands.

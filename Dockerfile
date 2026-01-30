@@ -19,7 +19,7 @@ RUN CGO_ENABLED=0 GOOS=linux go build -o ravenbot ./cmd/bot/main.go
 # Final stage
 FROM alpine:latest
 
-# Install certificates, timezone data, and Chromium for headless browsing
+# Install certificates, timezone data, Chromium for headless browsing, and Node.js for MCP servers
 RUN apk add --no-cache \
     ca-certificates \
     tzdata \
@@ -28,7 +28,13 @@ RUN apk add --no-cache \
     nss \
     freetype \
     harfbuzz \
-    ttf-freefont
+    ttf-freefont \
+    nodejs \
+    npm \
+    git
+
+# Pre-install MCP servers for performance
+RUN npm install -g @modelcontextprotocol/server-filesystem @cyanheads/git-mcp-server @modelcontextprotocol/server-github
 
 # Set Chrome path for chromedp
 ENV CHROME_BIN=/usr/bin/chromium-browser

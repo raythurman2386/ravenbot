@@ -2,6 +2,9 @@ package agent
 
 import (
 	"context"
+	"fmt"
+	"strings"
+
 	"github.com/raythurman2386/ravenbot/internal/tools"
 
 	"google.golang.org/genai"
@@ -41,7 +44,7 @@ var RavenTools = []*genai.Tool{
 			},
 			{
 				Name:        "ShellExecute",
-				Description: "Executes a restricted set of shell commands (df, free, uptime, whoami, date, ls).",
+				Description: "Executes a restricted set of shell commands (df, free, uptime, whoami, date).",
 				Parameters: &genai.Schema{
 					Type: genai.TypeObject,
 					Properties: map[string]*genai.Schema{
@@ -96,6 +99,7 @@ var RavenTools = []*genai.Tool{
 
 // Map function names to actual implementations
 func (a *Agent) handleToolCall(ctx context.Context, call *genai.FunctionCall) (any, error) {
+	// 1. Try Native Tools First
 	switch call.Name {
 	case "FetchRSS":
 		url := call.Args["url"].(string)
@@ -112,11 +116,6 @@ func (a *Agent) handleToolCall(ctx context.Context, call *genai.FunctionCall) (a
 				return nil, err
 			}
 			if !exists {
-				// Avoid adding the headline here, just filter.
-				// The model should decide what to include in the briefing.
-				// However, once it's included, we should record it.
-				// For simplicity in the MVP, we mark them as "seen" only when they are fetched.
-				// This might miss some if the model ignores them, but ensures we don't repeat.
 				if err := a.db.AddHeadline(ctx, item.Title, item.Link); err != nil {
 					return nil, err
 				}
@@ -145,7 +144,25 @@ func (a *Agent) handleToolCall(ctx context.Context, call *genai.FunctionCall) (a
 		repo := call.Args["repo"].(string)
 		task := call.Args["task"].(string)
 		return tools.DelegateToJules(ctx, a.cfg.JulesAPIKey, repo, task)
-	default:
-		return nil, nil
 	}
+
+	// 2. Try MCP Tools
+	// Name format: serverName_toolName
+	parts := strings.SplitN(call.Name, "_", 2)
+	if len(parts) == 2 {
+		serverName := parts[0]
+		toolName := parts[1]
+
+		if client, ok := a.mcpClients[serverName]; ok {
+			// Convert genai args map[string]any to just map[string]any (same type usually)
+			result, err := client.CallTool(toolName, call.Args)
+			if err != nil {
+				return nil, fmt.Errorf("MCP tool call failed: %w", err)
+			}
+			// Return just the content for now
+			return result.Content, nil
+		}
+	}
+
+	return nil, fmt.Errorf("unknown tool: %s", call.Name)
 }

@@ -3,20 +3,25 @@ package agent
 import (
 	"context"
 	"fmt"
-	"github.com/raythurman2386/ravenbot/internal/config"
-	"github.com/raythurman2386/ravenbot/internal/db"
+	"log/slog"
 	"strings"
 	"sync"
+
+	"github.com/raythurman2386/ravenbot/internal/config"
+	"github.com/raythurman2386/ravenbot/internal/db"
+	"github.com/raythurman2386/ravenbot/internal/mcp"
 
 	"google.golang.org/genai"
 )
 
 type Agent struct {
-	client   *genai.Client
-	cfg      *config.Config
-	db       *db.DB
-	sessions map[string]*genai.Chat // Chat sessions by user/channel ID
-	mu       sync.RWMutex
+	client     *genai.Client
+	cfg        *config.Config
+	db         *db.DB
+	sessions   map[string]*genai.Chat // Chat sessions by user/channel ID
+	mu         sync.RWMutex
+	mcpClients map[string]*mcp.Client
+	tools      []*genai.Tool
 }
 
 const model = "gemini-3-flash-preview"
@@ -58,12 +63,62 @@ func NewAgent(ctx context.Context, cfg *config.Config, database *db.DB) (*Agent,
 		return nil, fmt.Errorf("failed to create GenAI client: %w", err)
 	}
 
-	return &Agent{
-		client:   client,
-		cfg:      cfg,
-		db:       database,
-		sessions: make(map[string]*genai.Chat),
-	}, nil
+	agent := &Agent{
+		client:     client,
+		cfg:        cfg,
+		db:         database,
+		sessions:   make(map[string]*genai.Chat),
+		mcpClients: make(map[string]*mcp.Client),
+		// Start with native tools
+		tools: append([]*genai.Tool{}, RavenTools...),
+	}
+
+	// Initialize MCP Servers
+	for name, serverCfg := range cfg.MCPServers {
+		slog.Info("Initializing MCP Server", "name", name, "command", serverCfg.Command)
+		mcpClient := mcp.NewStdioClient(serverCfg.Command, serverCfg.Args)
+
+		if err := mcpClient.Start(); err != nil {
+			slog.Error("Failed to start MCP server", "name", name, "error", err)
+			continue
+		}
+
+		if err := mcpClient.Initialize(); err != nil {
+			slog.Error("Failed to initialize MCP server", "name", name, "error", err)
+			mcpClient.Close()
+			continue
+		}
+
+		tools, err := mcpClient.ListTools()
+		if err != nil {
+			slog.Error("Failed to list tools from MCP server", "name", name, "error", err)
+			mcpClient.Close()
+			continue
+		}
+
+		agent.mcpClients[name] = mcpClient
+
+		// Convert and add tools
+		for _, tool := range tools {
+			genTool, err := mcpToolToGenAI(name, tool)
+			if err != nil {
+				slog.Error("Failed to convert MCP tool", "name", tool.Name, "server", name, "error", err)
+				continue
+			}
+			// Append to the existing FunctionDeclarations of the first tool set (assuming RavenTools[0] exists)
+			if len(agent.tools) > 0 && agent.tools[0].FunctionDeclarations != nil {
+				agent.tools[0].FunctionDeclarations = append(agent.tools[0].FunctionDeclarations, genTool)
+			} else {
+				// Fallback if RavenTools is empty for some reason
+				agent.tools = append(agent.tools, &genai.Tool{
+					FunctionDeclarations: []*genai.FunctionDeclaration{genTool},
+				})
+			}
+			slog.Info("Registered MCP Tool", "name", genTool.Name, "server", name)
+		}
+	}
+
+	return agent, nil
 }
 
 // getOrCreateSession retrieves an existing chat session or creates a new one
@@ -86,7 +141,7 @@ func (a *Agent) getOrCreateSession(ctx context.Context, sessionID string) (*gena
 	}
 
 	chat, err := a.client.Chats.Create(ctx, model, &genai.GenerateContentConfig{
-		Tools: RavenTools,
+		Tools: a.tools,
 		SystemInstruction: &genai.Content{
 			Parts: []*genai.Part{
 				{Text: systemPrompt},
@@ -128,7 +183,7 @@ func (a *Agent) Chat(ctx context.Context, sessionID, message string) (string, er
 // RunMission executes a one-shot research mission (no session persistence)
 func (a *Agent) RunMission(ctx context.Context, prompt string) (string, error) {
 	chat, err := a.client.Chats.Create(ctx, model, &genai.GenerateContentConfig{
-		Tools: RavenTools,
+		Tools: a.tools,
 		SystemInstruction: &genai.Content{
 			Parts: []*genai.Part{
 				{Text: `You are ravenbot, a sophisticated technical research assistant. 
@@ -170,7 +225,10 @@ func (a *Agent) processResponse(ctx context.Context, chat *genai.Chat, resp *gen
 				hasCalls = true
 				result, err := a.handleToolCall(ctx, part.FunctionCall)
 				if err != nil {
-					return "", fmt.Errorf("tool call %s failed: %w", part.FunctionCall.Name, err)
+					// We log the error but try to continue or return it to the model
+					// Ideally, return an error message to the model so it can retry
+					slog.Error("Tool execution failed", "tool", part.FunctionCall.Name, "error", err)
+					result = map[string]string{"error": err.Error()}
 				}
 
 				toolResponses = append(toolResponses, genai.Part{
