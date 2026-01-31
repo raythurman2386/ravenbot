@@ -8,7 +8,7 @@ require (
 	github.com/chromedp/chromedp v0.14.2
 	github.com/go-telegram-bot-api/telegram-bot-api/v5 v5.5.1
 	github.com/mmcdole/gofeed v1.3.0
-	github.com/raythurman2386/cronlib v0.0.0-20260130020906-579ed62d2f9b
+	github.com/raythurman2386/cronlib v0.1.0
 	github.com/stretchr/testify v1.11.1
 	google.golang.org/genai v1.44.0
 	modernc.org/sqlite v1.44.3

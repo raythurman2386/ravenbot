@@ -86,8 +86,8 @@ github.com/orisano/pixelmatch v0.0.0-20220722002657-fb0b55479cde h1:x0TT0RDC7UhA
 github.com/orisano/pixelmatch v0.0.0-20220722002657-fb0b55479cde/go.mod h1:nZgzbfBr3hhjoZnS66nKrHmduYNpc34ny7RK4z5/HM0=
 github.com/pmezard/go-difflib v1.0.0 h1:4DBwDE0NGyQoBHbLQYPwSUPoCMWR5BEzIk/f1lZbAQM=
 github.com/pmezard/go-difflib v1.0.0/go.mod h1:iKH77koFhYxTK1pcRnkKkqfTogsbg7gZNVY4sRDYZ/4=
-github.com/raythurman2386/cronlib v0.0.0-20260130020906-579ed62d2f9b h1:MkahosUDmnu3IwxIRSBjty4ClbrkfwgEefgNs1gBnIU=
-github.com/raythurman2386/cronlib v0.0.0-20260130020906-579ed62d2f9b/go.mod h1:X5KVRnoQlP8zVOK9VkIKSuM6qJSyRGcVRxsuHtFPpZg=
+github.com/raythurman2386/cronlib v0.1.0 h1:o8ZF0TqSgj4gnfQLRNj6h5bpTJBFd98ei8rB5dRaj+c=
+github.com/raythurman2386/cronlib v0.1.0/go.mod h1:AXMnJNhK5EJvtqtEydQOwz0L/0DOBwcN9XO1l7L9tjs=
 github.com/remyoudompheng/bigfft v0.0.0-20230129092748-24d4a6f8daec h1:W09IVJc94icq4NjY3clb7Lk8O1qJ8BdBEF8z0ibU0rE=
 github.com/remyoudompheng/bigfft v0.0.0-20230129092748-24d4a6f8daec/go.mod h1:qqbHyh8v60DhA7CoWK5oRCqLrMHRGoxYCSS9EjAz6Eo=
 github.com/rogpeppe/go-internal v1.14.1 h1:UQB4HGPB6osV0SQTLymcB4TgvyWu6ZyliaW0tI/otEQ=
