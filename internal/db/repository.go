@@ -77,7 +77,9 @@ func (db *DB) AddHeadlines(ctx context.Context, headlines []Headline) error {
 	if err != nil {
 		return fmt.Errorf("failed to begin transaction: %w", err)
 	}
-	defer tx.Rollback()
+	defer func() {
+		_ = tx.Rollback()
+	}()
 
 	stmt, err := tx.PrepareContext(ctx, "INSERT INTO headlines (title, url) VALUES (?, ?)")
 	if err != nil {
