@@ -77,6 +77,20 @@ var RavenTools = []*genai.Tool{
 				},
 			},
 			{
+				Name:        "SearchWeb",
+				Description: "Performs a web search to find the latest information and URLs.",
+				Parameters: &genai.Schema{
+					Type: genai.TypeObject,
+					Properties: map[string]*genai.Schema{
+						"query": {
+							Type:        genai.TypeString,
+							Description: "The search query.",
+						},
+					},
+					Required: []string{"query"},
+				},
+			},
+			{
 				Name:        "JulesTask",
 				Description: "Delegates a complex coding or repository task to the Gemini Jules Agent.",
 				Parameters: &genai.Schema{
@@ -131,6 +145,9 @@ func (a *Agent) handleToolCall(ctx context.Context, call *genai.FunctionCall) (a
 		repo := call.Args["repo"].(string)
 		task := call.Args["task"].(string)
 		return tools.DelegateToJules(ctx, a.cfg.JulesAPIKey, repo, task)
+	case "SearchWeb":
+		query := call.Args["query"].(string)
+		return tools.SearchWeb(ctx, query)
 	case "ReadMCPResource":
 		serverName := call.Args["server"].(string)
 		uri := call.Args["uri"].(string)

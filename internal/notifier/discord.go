@@ -18,6 +18,10 @@ func NewDiscordNotifier(token string, channelID string) (*DiscordNotifier, error
 	if err != nil {
 		return nil, fmt.Errorf("failed to initialize discord session: %w", err)
 	}
+
+	// Set intents to receive messages and message content
+	dg.Identify.Intents = discordgo.IntentsGuildMessages | discordgo.IntentsDirectMessages | discordgo.IntentsMessageContent
+
 	return &DiscordNotifier{session: dg, channelID: channelID}, nil
 }
 
