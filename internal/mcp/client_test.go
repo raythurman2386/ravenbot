@@ -79,7 +79,7 @@ func TestStdioClient(t *testing.T) {
 
 	client := NewStdioClient(exe, []string{})
 	// Set the env var for the subprocess
-	client.cmd.Env = append(os.Environ(), "GO_TEST_MCP_SERVER=1")
+	client.transport.(*StdioTransport).cmd.Env = append(os.Environ(), "GO_TEST_MCP_SERVER=1")
 
 	if err := client.Start(); err != nil {
 		t.Fatalf("Failed to start client: %v", err)

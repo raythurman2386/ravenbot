@@ -97,3 +97,35 @@ type Content struct {
 	Type string `json:"type"` // "text" or "image" or "resource"
 	Text string `json:"text,omitempty"`
 }
+
+// -- Resource Types --
+
+// Resource represents a resource definition
+type Resource struct {
+	URI         string `json:"uri"`
+	Name        string `json:"name"`
+	Description string `json:"description,omitempty"`
+	MimeType    string `json:"mimeType,omitempty"`
+}
+
+// ListResourcesResult is the result of "resources/list"
+type ListResourcesResult struct {
+	Resources []Resource `json:"resources"`
+}
+
+// ReadResourceParams for "resources/read"
+type ReadResourceParams struct {
+	URI string `json:"uri"`
+}
+
+// ReadResourceResult is the result of "resources/read"
+type ReadResourceResult struct {
+	Contents []ResourceContent `json:"contents"`
+}
+
+type ResourceContent struct {
+	URI      string `json:"uri"`
+	MimeType string `json:"mimeType,omitempty"`
+	Text     string `json:"text,omitempty"`
+	Blob     string `json:"blob,omitempty"` // base64
+}

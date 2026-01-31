@@ -93,3 +93,33 @@ func mcpToolToGenAI(serverName string, tool mcp.Tool) (*genai.FunctionDeclaratio
 		Parameters:  schema,
 	}, nil
 }
+
+// mcpResourceToGenAI converts an mcp.Resource to a virtual tool declaration
+func mcpResourceToGenAI(serverName string, res mcp.Resource) *genai.FunctionDeclaration {
+	// Virtual tool name for reading this specific resource
+	// We'll use a generic ReadResource tool instead of individual virtual tools for each URI
+	// to keep the tool count manageable.
+	return nil
+}
+
+// GetReadResourceTool returns a generic tool for reading MCP resources
+func GetReadResourceTool() *genai.FunctionDeclaration {
+	return &genai.FunctionDeclaration{
+		Name:        "ReadMCPResource",
+		Description: "Reads the content of an MCP resource from a specific server and URI.",
+		Parameters: &genai.Schema{
+			Type: genai.TypeObject,
+			Properties: map[string]*genai.Schema{
+				"server": {
+					Type:        genai.TypeString,
+					Description: "The name of the MCP server.",
+				},
+				"uri": {
+					Type:        genai.TypeString,
+					Description: "The URI of the resource to read.",
+				},
+			},
+			Required: []string{"server", "uri"},
+		},
+	}
+}

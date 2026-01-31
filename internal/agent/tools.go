@@ -144,6 +144,17 @@ func (a *Agent) handleToolCall(ctx context.Context, call *genai.FunctionCall) (a
 		repo := call.Args["repo"].(string)
 		task := call.Args["task"].(string)
 		return tools.DelegateToJules(ctx, a.cfg.JulesAPIKey, repo, task)
+	case "ReadMCPResource":
+		serverName := call.Args["server"].(string)
+		uri := call.Args["uri"].(string)
+		if client, ok := a.mcpClients[serverName]; ok {
+			contents, err := client.ReadResource(uri)
+			if err != nil {
+				return nil, fmt.Errorf("failed to read MCP resource: %w", err)
+			}
+			return contents, nil
+		}
+		return nil, fmt.Errorf("unknown MCP server: %s", serverName)
 	}
 
 	// 2. Try MCP Tools
@@ -158,6 +169,13 @@ func (a *Agent) handleToolCall(ctx context.Context, call *genai.FunctionCall) (a
 			result, err := client.CallTool(toolName, call.Args)
 			if err != nil {
 				return nil, fmt.Errorf("MCP tool call failed: %w", err)
+			}
+			if result.IsError {
+				// Format error for Gemini to self-correct
+				return map[string]any{
+					"error":   true,
+					"content": result.Content,
+				}, nil
 			}
 			// Return just the content for now
 			return result.Content, nil

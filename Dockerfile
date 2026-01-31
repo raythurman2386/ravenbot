@@ -34,7 +34,7 @@ RUN apk add --no-cache \
     git
 
 # Pre-install MCP servers for performance
-RUN npm install -g @modelcontextprotocol/server-filesystem @cyanheads/git-mcp-server @modelcontextprotocol/server-github
+RUN npm install -g @modelcontextprotocol/server-filesystem @cyanheads/git-mcp-server @modelcontextprotocol/server-github @modelcontextprotocol/server-memory
 
 # Set Chrome path for chromedp
 ENV CHROME_BIN=/usr/bin/chromium-browser
@@ -42,8 +42,9 @@ ENV CHROMEDP_NO_SANDBOX=true
 
 WORKDIR /app
 
-# Copy binary from builder
+# Copy binary and config from builder
 COPY --from=builder /app/ravenbot .
+COPY --from=builder /app/config.json* ./
 
 # Create directory for logs
 RUN mkdir -p daily_logs

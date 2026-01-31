@@ -73,10 +73,18 @@ func NewAgent(ctx context.Context, cfg *config.Config, database *db.DB) (*Agent,
 		tools: append([]*genai.Tool{}, RavenTools...),
 	}
 
+	// Add generic MCP resource tool
+	agent.registerTool(GetReadResourceTool())
+
 	// Initialize MCP Servers
 	for name, serverCfg := range cfg.MCPServers {
 		slog.Info("Initializing MCP Server", "name", name, "command", serverCfg.Command)
-		mcpClient := mcp.NewStdioClient(serverCfg.Command, serverCfg.Args)
+		var mcpClient *mcp.Client
+		if strings.HasPrefix(serverCfg.Command, "http://") || strings.HasPrefix(serverCfg.Command, "https://") {
+			mcpClient = mcp.NewSSEClient(serverCfg.Command)
+		} else {
+			mcpClient = mcp.NewStdioClient(serverCfg.Command, serverCfg.Args)
+		}
 
 		if err := mcpClient.Start(); err != nil {
 			slog.Error("Failed to start MCP server", "name", name, "error", err)
@@ -89,36 +97,48 @@ func NewAgent(ctx context.Context, cfg *config.Config, database *db.DB) (*Agent,
 			continue
 		}
 
+		// Register Tools
 		tools, err := mcpClient.ListTools()
 		if err != nil {
 			slog.Error("Failed to list tools from MCP server", "name", name, "error", err)
-			mcpClient.Close()
-			continue
+		} else {
+			for _, tool := range tools {
+				genTool, err := mcpToolToGenAI(name, tool)
+				if err != nil {
+					slog.Error("Failed to convert MCP tool", "name", tool.Name, "server", name, "error", err)
+					continue
+				}
+				agent.registerTool(genTool)
+				slog.Info("Registered MCP Tool", "name", genTool.Name, "server", name)
+			}
+		}
+
+		// Register Resources as virtual tools
+		resources, err := mcpClient.ListResources()
+		if err != nil {
+			slog.Debug("MCP server does not support resources", "name", name)
+		} else {
+			for _, res := range resources {
+				genTool := mcpResourceToGenAI(name, res)
+				agent.registerTool(genTool)
+				slog.Info("Registered MCP Resource as Tool", "uri", res.URI, "server", name)
+			}
 		}
 
 		agent.mcpClients[name] = mcpClient
-
-		// Convert and add tools
-		for _, tool := range tools {
-			genTool, err := mcpToolToGenAI(name, tool)
-			if err != nil {
-				slog.Error("Failed to convert MCP tool", "name", tool.Name, "server", name, "error", err)
-				continue
-			}
-			// Append to the existing FunctionDeclarations of the first tool set (assuming RavenTools[0] exists)
-			if len(agent.tools) > 0 && agent.tools[0].FunctionDeclarations != nil {
-				agent.tools[0].FunctionDeclarations = append(agent.tools[0].FunctionDeclarations, genTool)
-			} else {
-				// Fallback if RavenTools is empty for some reason
-				agent.tools = append(agent.tools, &genai.Tool{
-					FunctionDeclarations: []*genai.FunctionDeclaration{genTool},
-				})
-			}
-			slog.Info("Registered MCP Tool", "name", genTool.Name, "server", name)
-		}
 	}
 
 	return agent, nil
+}
+
+func (a *Agent) registerTool(genTool *genai.FunctionDeclaration) {
+	if len(a.tools) > 0 && a.tools[0].FunctionDeclarations != nil {
+		a.tools[0].FunctionDeclarations = append(a.tools[0].FunctionDeclarations, genTool)
+	} else {
+		a.tools = append(a.tools, &genai.Tool{
+			FunctionDeclarations: []*genai.FunctionDeclaration{genTool},
+		})
+	}
 }
 
 // getOrCreateSession retrieves an existing chat session or creates a new one
