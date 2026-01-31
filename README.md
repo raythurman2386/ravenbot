@@ -76,6 +76,38 @@ docker attach ravenbot-ravenbot-1
 
 ---
 
+## 🔌 Extending with MCP (Model Context Protocol)
+
+ravenbot supports the **Model Context Protocol (MCP)**, allowing you to easily add new tools without modifying the code. You can connect to any standard MCP server (e.g., Filesystem, GitHub, Postgres, Slack).
+
+### Configuration
+Create a `config.json` file in the root directory to define your MCP servers:
+
+```json
+{
+  "mcpServers": {
+    "filesystem": {
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-filesystem", "/path/to/allowed/files"]
+    },
+    "git": {
+      "command": "docker",
+      "args": ["run", "-i", "--rm", "mcp/git"]
+    },
+    "github": {
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-github"]
+    }
+  }
+}
+```
+
+**Note:** For the GitHub server, you must set `GITHUB_PERSONAL_ACCESS_TOKEN` in your `.env` file.
+
+ravenbot will automatically discover tools from these servers (e.g., `filesystem_read_file`, `git_diff`, `github_create_pull_request`) and make them available to the agent.
+
+---
+
 ## 📁 Project Structure
 
 - `cmd/bot/`: Main application entry point and interactive loop.

@@ -3,20 +3,25 @@ package agent
 import (
 	"context"
 	"fmt"
-	"github.com/raythurman2386/ravenbot/internal/config"
-	"github.com/raythurman2386/ravenbot/internal/db"
+	"log/slog"
 	"strings"
 	"sync"
+
+	"github.com/raythurman2386/ravenbot/internal/config"
+	"github.com/raythurman2386/ravenbot/internal/db"
+	"github.com/raythurman2386/ravenbot/internal/mcp"
 
 	"google.golang.org/genai"
 )
 
 type Agent struct {
-	client   *genai.Client
-	cfg      *config.Config
-	db       *db.DB
-	sessions map[string]*genai.Chat // Chat sessions by user/channel ID
-	mu       sync.RWMutex
+	client     *genai.Client
+	cfg        *config.Config
+	db         *db.DB
+	sessions   map[string]*genai.Chat // Chat sessions by user/channel ID
+	mu         sync.RWMutex
+	mcpClients map[string]*mcp.Client
+	tools      []*genai.Tool
 }
 
 const model = "gemini-3-flash-preview"
@@ -58,12 +63,82 @@ func NewAgent(ctx context.Context, cfg *config.Config, database *db.DB) (*Agent,
 		return nil, fmt.Errorf("failed to create GenAI client: %w", err)
 	}
 
-	return &Agent{
-		client:   client,
-		cfg:      cfg,
-		db:       database,
-		sessions: make(map[string]*genai.Chat),
-	}, nil
+	agent := &Agent{
+		client:     client,
+		cfg:        cfg,
+		db:         database,
+		sessions:   make(map[string]*genai.Chat),
+		mcpClients: make(map[string]*mcp.Client),
+		// Start with native tools
+		tools: append([]*genai.Tool{}, RavenTools...),
+	}
+
+	// Add generic MCP resource tool
+	agent.registerTool(GetReadResourceTool())
+
+	// Initialize MCP Servers
+	for name, serverCfg := range cfg.MCPServers {
+		slog.Info("Initializing MCP Server", "name", name, "command", serverCfg.Command)
+		var mcpClient *mcp.Client
+		if strings.HasPrefix(serverCfg.Command, "http://") || strings.HasPrefix(serverCfg.Command, "https://") {
+			mcpClient = mcp.NewSSEClient(serverCfg.Command)
+		} else {
+			mcpClient = mcp.NewStdioClient(serverCfg.Command, serverCfg.Args)
+		}
+
+		if err := mcpClient.Start(); err != nil {
+			slog.Error("Failed to start MCP server", "name", name, "error", err)
+			continue
+		}
+
+		if err := mcpClient.Initialize(); err != nil {
+			slog.Error("Failed to initialize MCP server", "name", name, "error", err)
+			mcpClient.Close()
+			continue
+		}
+
+		// Register Tools
+		tools, err := mcpClient.ListTools()
+		if err != nil {
+			slog.Error("Failed to list tools from MCP server", "name", name, "error", err)
+		} else {
+			for _, tool := range tools {
+				genTool, err := mcpToolToGenAI(name, tool)
+				if err != nil {
+					slog.Error("Failed to convert MCP tool", "name", tool.Name, "server", name, "error", err)
+					continue
+				}
+				agent.registerTool(genTool)
+				slog.Info("Registered MCP Tool", "name", genTool.Name, "server", name)
+			}
+		}
+
+		// Register Resources as virtual tools
+		resources, err := mcpClient.ListResources()
+		if err != nil {
+			slog.Debug("MCP server does not support resources", "name", name)
+		} else {
+			for _, res := range resources {
+				genTool := mcpResourceToGenAI(name, res)
+				agent.registerTool(genTool)
+				slog.Info("Registered MCP Resource as Tool", "uri", res.URI, "server", name)
+			}
+		}
+
+		agent.mcpClients[name] = mcpClient
+	}
+
+	return agent, nil
+}
+
+func (a *Agent) registerTool(genTool *genai.FunctionDeclaration) {
+	if len(a.tools) > 0 && a.tools[0].FunctionDeclarations != nil {
+		a.tools[0].FunctionDeclarations = append(a.tools[0].FunctionDeclarations, genTool)
+	} else {
+		a.tools = append(a.tools, &genai.Tool{
+			FunctionDeclarations: []*genai.FunctionDeclaration{genTool},
+		})
+	}
 }
 
 // getOrCreateSession retrieves an existing chat session or creates a new one
@@ -86,7 +161,7 @@ func (a *Agent) getOrCreateSession(ctx context.Context, sessionID string) (*gena
 	}
 
 	chat, err := a.client.Chats.Create(ctx, model, &genai.GenerateContentConfig{
-		Tools: RavenTools,
+		Tools: a.tools,
 		SystemInstruction: &genai.Content{
 			Parts: []*genai.Part{
 				{Text: systemPrompt},
@@ -128,7 +203,7 @@ func (a *Agent) Chat(ctx context.Context, sessionID, message string) (string, er
 // RunMission executes a one-shot research mission (no session persistence)
 func (a *Agent) RunMission(ctx context.Context, prompt string) (string, error) {
 	chat, err := a.client.Chats.Create(ctx, model, &genai.GenerateContentConfig{
-		Tools: RavenTools,
+		Tools: a.tools,
 		SystemInstruction: &genai.Content{
 			Parts: []*genai.Part{
 				{Text: `You are ravenbot, a sophisticated technical research assistant. 
@@ -170,7 +245,10 @@ func (a *Agent) processResponse(ctx context.Context, chat *genai.Chat, resp *gen
 				hasCalls = true
 				result, err := a.handleToolCall(ctx, part.FunctionCall)
 				if err != nil {
-					return "", fmt.Errorf("tool call %s failed: %w", part.FunctionCall.Name, err)
+					// We log the error but try to continue or return it to the model
+					// Ideally, return an error message to the model so it can retry
+					slog.Error("Tool execution failed", "tool", part.FunctionCall.Name, "error", err)
+					result = map[string]string{"error": err.Error()}
 				}
 
 				toolResponses = append(toolResponses, genai.Part{
