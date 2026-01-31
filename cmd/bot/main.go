@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/signal"
 	"strings"
+	"sync"
 	"syscall"
 	"time"
 
@@ -110,13 +111,19 @@ func main() {
 
 		slog.Info("Mission completed", "path", path)
 
+		var wg sync.WaitGroup
 		for _, n := range notifiers {
-			if err := n.Send(ctx, report); err != nil {
-				slog.Error("Failed to send report", "notifier", n.Name(), "error", err)
-			} else {
-				slog.Info("Report sent", "notifier", n.Name())
-			}
+			wg.Add(1)
+			go func(n notifier.Notifier) {
+				defer wg.Done()
+				if err := n.Send(ctx, report); err != nil {
+					slog.Error("Failed to send report", "notifier", n.Name(), "error", err)
+				} else {
+					slog.Info("Report sent", "notifier", n.Name())
+				}
+			}(n)
 		}
+		wg.Wait()
 	}
 
 	// Unified message handler - handles all messages conversationally
