@@ -92,9 +92,10 @@ func main() {
 	missionFunc := func(ctx context.Context) {
 		slog.Info("Starting scheduled mission")
 		today := time.Now().Format("Monday, January 2, 2006")
-		prompt := fmt.Sprintf("Today is %s. Research the latest technical news in Golang, Python, Geospatial Engineering, and AI/LLM. "+
-			"IMPORTANT: potentially use search queries that include the date or 'last 24 hours' to ensure you find news from today or yesterday. "+
-			"Do not report on old news. Generate a detailed daily briefing in Markdown format.", today)
+		prompt := fmt.Sprintf("Today is %s. Access your memory to see if there are any specific technologies, projects, or interests the user has previously mentioned. "+
+			"Then, conduct research to find the most important technical news from the **past 24 hours** in Golang, Python, Geospatial Engineering, AI/LLM, and any other topics found in memory. "+
+			"Use your **SearchWeb** tool with date-specific queries (e.g., 'Golang news Jan 31 2026') and check **RSS feeds** to ensure you only report on brand new developments. "+
+			"Do not report on old news. Generate a detailed, personalized daily briefing in Markdown format.", today)
 
 		report, err := bot.RunMission(ctx, prompt)
 		if err != nil {

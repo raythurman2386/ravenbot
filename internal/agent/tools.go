@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/raythurman2386/ravenbot/internal/db"
 	"github.com/raythurman2386/ravenbot/internal/tools"
 
 	"google.golang.org/genai"
@@ -76,6 +77,20 @@ var RavenTools = []*genai.Tool{
 				},
 			},
 			{
+				Name:        "SearchWeb",
+				Description: "Performs a web search to find the latest information and URLs.",
+				Parameters: &genai.Schema{
+					Type: genai.TypeObject,
+					Properties: map[string]*genai.Schema{
+						"query": {
+							Type:        genai.TypeString,
+							Description: "The search query.",
+						},
+					},
+					Required: []string{"query"},
+				},
+			},
+			{
 				Name:        "JulesTask",
 				Description: "Delegates a complex coding or repository task to the Gemini Jules Agent.",
 				Parameters: &genai.Schema{
@@ -108,21 +123,7 @@ func (a *Agent) handleToolCall(ctx context.Context, call *genai.FunctionCall) (a
 			return nil, err
 		}
 
-		// Deduplication logic
-		var newItems []tools.RSSItem
-		for _, item := range items {
-			exists, err := a.db.HasHeadline(ctx, item.Link)
-			if err != nil {
-				return nil, err
-			}
-			if !exists {
-				if err := a.db.AddHeadline(ctx, item.Title, item.Link); err != nil {
-					return nil, err
-				}
-				newItems = append(newItems, item)
-			}
-		}
-		return newItems, nil
+		return a.deduplicateRSSItems(ctx, items)
 	case "ScrapePage":
 		url := call.Args["url"].(string)
 		return tools.ScrapePage(ctx, url)
@@ -144,6 +145,9 @@ func (a *Agent) handleToolCall(ctx context.Context, call *genai.FunctionCall) (a
 		repo := call.Args["repo"].(string)
 		task := call.Args["task"].(string)
 		return tools.DelegateToJules(ctx, a.cfg.JulesAPIKey, repo, task)
+	case "SearchWeb":
+		query := call.Args["query"].(string)
+		return tools.SearchWeb(ctx, query)
 	case "ReadMCPResource":
 		serverName := call.Args["server"].(string)
 		uri := call.Args["uri"].(string)
@@ -183,4 +187,41 @@ func (a *Agent) handleToolCall(ctx context.Context, call *genai.FunctionCall) (a
 	}
 
 	return nil, fmt.Errorf("unknown tool: %s", call.Name)
+}
+
+func (a *Agent) deduplicateRSSItems(ctx context.Context, items []tools.RSSItem) ([]tools.RSSItem, error) {
+	if len(items) == 0 {
+		return nil, nil
+	}
+
+	urls := make([]string, len(items))
+	for i, item := range items {
+		urls[i] = item.Link
+	}
+
+	existing, err := a.db.GetExistingHeadlines(ctx, urls)
+	if err != nil {
+		return nil, err
+	}
+
+	var newItems []tools.RSSItem
+	var headlinesToInsert []db.Headline
+
+	for _, item := range items {
+		if !existing[item.Link] {
+			newItems = append(newItems, item)
+			headlinesToInsert = append(headlinesToInsert, db.Headline{
+				Title: item.Title,
+				URL:   item.Link,
+			})
+			// Prevent duplicates within the same batch
+			existing[item.Link] = true
+		}
+	}
+
+	if err := a.db.AddHeadlines(ctx, headlinesToInsert); err != nil {
+		return nil, err
+	}
+
+	return newItems, nil
 }
