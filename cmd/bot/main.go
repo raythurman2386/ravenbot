@@ -127,10 +127,17 @@ func main() {
 	}
 
 	// Unified message handler - handles all messages conversationally
-	handleMessage := func(sessionID, text string, reply func(string)) {
+	handleMessage := func(sessionID, text string, n notifier.Notifier, reply func(string)) {
 		text = strings.TrimSpace(text)
 		if text == "" {
 			return
+		}
+
+		// Start typing indicator if notifier is provided
+		var stopTyping func()
+		if n != nil {
+			stopTyping = n.StartTyping(ctx)
+			defer stopTyping()
 		}
 
 		// Handle special commands first
@@ -209,7 +216,7 @@ func main() {
 		case *notifier.TelegramNotifier:
 			go botNotifier.StartListener(ctx, func(chatID int64, text string) {
 				sessionID := fmt.Sprintf("telegram-%d", chatID)
-				handleMessage(sessionID, text, func(reply string) {
+				handleMessage(sessionID, text, botNotifier, func(reply string) {
 					if err := botNotifier.Send(ctx, reply); err != nil {
 						slog.Error("Failed to send Telegram reply", "error", err)
 					}
@@ -218,7 +225,7 @@ func main() {
 		case *notifier.DiscordNotifier:
 			go botNotifier.StartListener(ctx, func(channelID string, text string) {
 				sessionID := fmt.Sprintf("discord-%s", channelID)
-				handleMessage(sessionID, text, func(reply string) {
+				handleMessage(sessionID, text, botNotifier, func(reply string) {
 					if err := botNotifier.Send(ctx, reply); err != nil {
 						slog.Error("Failed to send Discord reply", "error", err)
 					}
@@ -235,7 +242,7 @@ func main() {
 		fmt.Print("> ")
 		for scanner.Scan() {
 			text := scanner.Text()
-			handleMessage(sessionID, text, func(reply string) {
+			handleMessage(sessionID, text, nil, func(reply string) {
 				fmt.Printf("\n%s\n\n> ", reply)
 			})
 		}

@@ -3,6 +3,7 @@ package notifier
 import (
 	"context"
 	"fmt"
+	"time"
 
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 )
@@ -24,14 +25,9 @@ func (t *TelegramNotifier) Send(ctx context.Context, message string) error {
 	// Telegram has a 4096 character limit
 	const limit = 4000
 
-	msgRunes := []rune(message)
-	for i := 0; i < len(msgRunes); i += limit {
-		end := i + limit
-		if end > len(msgRunes) {
-			end = len(msgRunes)
-		}
-
-		msg := tgbotapi.NewMessage(t.chatID, string(msgRunes[i:end]))
+	chunks := splitMessage(message, limit)
+	for _, chunk := range chunks {
+		msg := tgbotapi.NewMessage(t.chatID, chunk)
 		msg.ParseMode = tgbotapi.ModeMarkdown
 
 		if _, err := t.bot.Send(msg); err != nil {
@@ -44,6 +40,30 @@ func (t *TelegramNotifier) Send(ctx context.Context, message string) error {
 
 func (t *TelegramNotifier) Name() string {
 	return "Telegram"
+}
+
+// StartTyping triggers the typing indicator and returns a function to stop it.
+func (t *TelegramNotifier) StartTyping(ctx context.Context) func() {
+	childCtx, cancel := context.WithCancel(ctx)
+	go func() {
+		ticker := time.NewTicker(5 * time.Second)
+		defer ticker.Stop()
+
+		// Send initial typing indicator
+		action := tgbotapi.NewChatAction(t.chatID, tgbotapi.ChatTyping)
+		_, _ = t.bot.Request(action)
+
+		for {
+			select {
+			case <-ticker.C:
+				action := tgbotapi.NewChatAction(t.chatID, tgbotapi.ChatTyping)
+				_, _ = t.bot.Request(action)
+			case <-childCtx.Done():
+				return
+			}
+		}
+	}()
+	return cancel
 }
 
 // StartListener begins listening for messages on Telegram.

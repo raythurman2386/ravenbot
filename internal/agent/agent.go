@@ -162,9 +162,8 @@ func (a *Agent) getOrCreateSession(ctx context.Context, sessionID string) (*gena
 	}
 
 	// Check if we have a compressed summary for this session
-	a.mu.RLock()
+	// Note: We already hold the write lock, so we can access summaries directly
 	summary := a.summaries[sessionID]
-	a.mu.RUnlock()
 
 	effectivePrompt := systemPrompt
 	if summary != "" {
@@ -196,22 +195,30 @@ func (a *Agent) ClearSession(sessionID string) {
 
 // Chat handles conversational messages with session persistence
 func (a *Agent) Chat(ctx context.Context, sessionID, message string) (string, error) {
+	slog.Info("Agent.Chat called", "sessionID", sessionID, "messageLength", len(message))
 	chat, err := a.getOrCreateSession(ctx, sessionID)
 	if err != nil {
+		slog.Error("Failed to get/create session", "sessionID", sessionID, "error", err)
 		return "", err
 	}
 
+	slog.Info("Sending message to Gemini", "sessionID", sessionID)
 	resp, err := chat.SendMessage(ctx, genai.Part{Text: message})
 	if err != nil {
 		// Session might be stale, try recreating
 		a.ClearSession(sessionID)
+		slog.Error("Failed to send message to Gemini", "sessionID", sessionID, "error", err)
 		return "", fmt.Errorf("failed to send message: %w", err)
 	}
 
+	slog.Info("Processing Gemini response", "sessionID", sessionID)
 	response, err := a.processResponse(ctx, chat, resp)
 	if err != nil {
+		slog.Error("Failed to process Gemini response", "sessionID", sessionID, "error", err)
 		return "", err
 	}
+
+	slog.Info("Agent.Chat completed", "sessionID", sessionID, "responseLength", len(response))
 
 	// Proactively check if context needs compression (async)
 	go func() {
@@ -255,8 +262,13 @@ Formatting Requirements:
 
 // processResponse handles tool calls and extracts final text
 func (a *Agent) processResponse(ctx context.Context, chat *genai.Chat, resp *genai.GenerateContentResponse) (string, error) {
+	var fullResponse strings.Builder
+	iteration := 0
 	for {
+		iteration++
+		slog.Debug("processResponse iteration", "iteration", iteration)
 		if len(resp.Candidates) == 0 || len(resp.Candidates[0].Content.Parts) == 0 {
+			slog.Debug("processResponse: no candidates or parts, breaking")
 			break
 		}
 
@@ -264,12 +276,18 @@ func (a *Agent) processResponse(ctx context.Context, chat *genai.Chat, resp *gen
 		hasCalls := false
 
 		for _, part := range resp.Candidates[0].Content.Parts {
+			if part.Text != "" {
+				if fullResponse.Len() > 0 {
+					fullResponse.WriteString("\n")
+				}
+				fullResponse.WriteString(part.Text)
+			}
+
 			if part.FunctionCall != nil {
 				hasCalls = true
+				slog.Info("Executing tool call", "tool", part.FunctionCall.Name, "iteration", iteration)
 				result, err := a.handleToolCall(ctx, part.FunctionCall)
 				if err != nil {
-					// We log the error but try to continue or return it to the model
-					// Ideally, return an error message to the model so it can retry
 					slog.Error("Tool execution failed", "tool", part.FunctionCall.Name, "error", err)
 					result = map[string]string{"error": err.Error()}
 				}
@@ -294,18 +312,12 @@ func (a *Agent) processResponse(ctx context.Context, chat *genai.Chat, resp *gen
 		}
 	}
 
-	// Return the final text response
-	if len(resp.Candidates) > 0 && len(resp.Candidates[0].Content.Parts) > 0 {
-		var finalParts []string
-		for _, part := range resp.Candidates[0].Content.Parts {
-			if part.Text != "" {
-				finalParts = append(finalParts, part.Text)
-			}
-		}
-		return strings.Join(finalParts, "\n"), nil
+	finalText := strings.TrimSpace(fullResponse.String())
+	if finalText == "" {
+		return "", fmt.Errorf("no response from Gemini")
 	}
 
-	return "", fmt.Errorf("no response from Gemini")
+	return finalText, nil
 }
 
 // checkAndCompressContext counts tokens and triggers summarization if threshold is hit
