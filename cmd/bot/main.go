@@ -38,6 +38,46 @@ Just type naturally! I can chat about anything.
 • "/status"
 `
 
+func runJob(ctx context.Context, job config.JobConfig, bot *agent.Agent, notifiers []notifier.Notifier) {
+	slog.Info("Running scheduled job", "name", job.Name, "type", job.Type)
+	switch job.Type {
+	case "research":
+		prompt := job.Params["prompt"]
+		today := time.Now().Format("Monday, January 2, 2006")
+		fullPrompt := fmt.Sprintf("Today is %s. %s", today, prompt)
+
+		report, err := bot.RunMission(ctx, fullPrompt)
+		if err != nil {
+			slog.Error("Job failed", "name", job.Name, "error", err)
+			return
+		}
+
+		path, err := agent.SaveReport("daily_logs", report)
+		if err != nil {
+			slog.Error("Failed to save report", "name", job.Name, "error", err)
+			return
+		}
+
+		slog.Info("Job completed", "name", job.Name, "path", path)
+
+		var wg sync.WaitGroup
+		for _, n := range notifiers {
+			wg.Add(1)
+			go func(n notifier.Notifier) {
+				defer wg.Done()
+				if err := n.Send(ctx, report); err != nil {
+					slog.Error("Failed to send report", "job", job.Name, "notifier", n.Name(), "error", err)
+				} else {
+					slog.Info("Report sent", "job", job.Name, "notifier", n.Name())
+				}
+			}(n)
+		}
+		wg.Wait()
+	default:
+		slog.Warn("Unknown job type", "type", job.Type, "name", job.Name)
+	}
+}
+
 func main() {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -86,44 +126,6 @@ func main() {
 		} else {
 			notifiers = append(notifiers, dn)
 		}
-	}
-
-	// Daily Mission at 7:00 AM
-	missionFunc := func(ctx context.Context) {
-		slog.Info("Starting scheduled mission")
-		today := time.Now().Format("Monday, January 2, 2006")
-		prompt := fmt.Sprintf("Today is %s. Access your memory to see if there are any specific technologies, projects, or interests the user has previously mentioned. "+
-			"Then, conduct research to find the most important technical news from the **past 24 hours** in Golang, Python, Geospatial Engineering, AI/LLM, and any other topics found in memory. "+
-			"Use your **SearchWeb** tool with date-specific queries (e.g., 'Golang news Jan 31 2026') and check **RSS feeds** to ensure you only report on brand new developments. "+
-			"Do not report on old news. Generate a detailed, personalized daily briefing in Markdown format.", today)
-
-		report, err := bot.RunMission(ctx, prompt)
-		if err != nil {
-			slog.Error("Mission failed", "error", err)
-			return
-		}
-
-		path, err := agent.SaveReport("daily_logs", report)
-		if err != nil {
-			slog.Error("Failed to save report", "error", err)
-			return
-		}
-
-		slog.Info("Mission completed", "path", path)
-
-		var wg sync.WaitGroup
-		for _, n := range notifiers {
-			wg.Add(1)
-			go func(n notifier.Notifier) {
-				defer wg.Done()
-				if err := n.Send(ctx, report); err != nil {
-					slog.Error("Failed to send report", "notifier", n.Name(), "error", err)
-				} else {
-					slog.Info("Report sent", "notifier", n.Name())
-				}
-			}(n)
-		}
-		wg.Wait()
 	}
 
 	// Unified message handler - handles all messages conversationally
@@ -248,18 +250,23 @@ func main() {
 		}
 	}()
 
-	// Schedule daily mission at 07:00
-	_, err = scheduler.AddJobWithOptions("0 0 7 * * *", missionFunc, cronlib.JobOptions{
-		Overlap: cronlib.OverlapForbid,
-	})
-	if err != nil {
-		slog.Error("Failed to schedule mission", "error", err)
-		os.Exit(1)
+	// Schedule jobs from config
+	for _, job := range cfg.Jobs {
+		job := job // Capture loop variable
+		_, err = scheduler.AddJobWithOptions(job.Schedule, func(ctx context.Context) {
+			runJob(ctx, job, bot, notifiers)
+		}, cronlib.JobOptions{
+			Overlap: cronlib.OverlapForbid,
+		})
+		if err != nil {
+			slog.Error("Failed to schedule job", "name", job.Name, "error", err)
+			continue
+		}
+		slog.Info("Scheduled job", "name", job.Name, "schedule", job.Schedule)
 	}
 
 	scheduler.Start()
 	slog.Info("ravenbot started", "time", time.Now().Format("15:04:05"))
-	slog.Info("Scheduled daily briefing at 07:00")
 
 	// Graceful shutdown
 	sigChan := make(chan os.Signal, 1)
