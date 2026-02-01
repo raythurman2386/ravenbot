@@ -25,7 +25,6 @@ type Agent struct {
 	tools      []*genai.Tool
 }
 
-
 func NewAgent(ctx context.Context, cfg *config.Config, database *db.DB) (*Agent, error) {
 	client, err := genai.NewClient(ctx, &genai.ClientConfig{
 		APIKey:  cfg.GeminiAPIKey,

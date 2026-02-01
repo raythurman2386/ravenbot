@@ -19,7 +19,6 @@ import (
 	"github.com/raythurman2386/ravenbot/internal/notifier"
 )
 
-
 func runJob(ctx context.Context, job config.JobConfig, bot *agent.Agent, notifiers []notifier.Notifier) {
 	slog.Info("Running scheduled job", "name", job.Name, "type", job.Type)
 	switch job.Type {
