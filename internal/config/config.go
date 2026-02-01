@@ -12,6 +12,13 @@ type MCPServerConfig struct {
 	Args    []string `json:"args"`
 }
 
+type JobConfig struct {
+	Name     string            `json:"name"`
+	Schedule string            `json:"schedule"`
+	Type     string            `json:"type"`
+	Params   map[string]string `json:"params"`
+}
+
 type Config struct {
 	GeminiAPIKey     string
 	TelegramBotToken string
@@ -20,6 +27,7 @@ type Config struct {
 	DiscordChannelID string
 	JulesAPIKey      string
 	MCPServers       map[string]MCPServerConfig `json:"mcpServers"`
+	Jobs             []JobConfig                `json:"jobs"`
 }
 
 func LoadConfig() (*Config, error) {
