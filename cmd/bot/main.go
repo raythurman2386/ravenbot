@@ -19,25 +19,6 @@ import (
 	"github.com/raythurman2386/ravenbot/internal/notifier"
 )
 
-const helpMessage = `🐦 **ravenbot Commands**
-
-**Conversation:**
-Just type naturally! I can chat about anything.
-
-**Commands:**
-• **/research <topic>** - Deep dive research on any topic
-• **/jules <owner/repo> <task>** - Delegate coding task to Jules AI
-• **/status** - Check server health
-• **/reset** - Clear conversation history
-• **/help** - Show this message
-
-**Examples:**
-• "What's new in Go 1.25?"
-• "/research kubernetes best practices"
-• "/jules raythurman2386/ravenbot add unit tests"
-• "/status"
-`
-
 func runJob(ctx context.Context, job config.JobConfig, bot *agent.Agent, notifiers []notifier.Notifier) {
 	slog.Info("Running scheduled job", "name", job.Name, "type", job.Type)
 	switch job.Type {
@@ -146,12 +127,12 @@ func main() {
 		lowerText := strings.ToLower(text)
 		switch {
 		case lowerText == "/help" || strings.HasPrefix(lowerText, "/help "):
-			reply(helpMessage)
+			reply(cfg.Bot.HelpMessage)
 			return
 
 		case lowerText == "/status" || strings.HasPrefix(lowerText, "/status "):
 			reply("🔍 Checking server health...")
-			statusPrompt := "Run system health checks using the ShellExecute tool. Check disk space (df -h), memory (free -h), and uptime. Provide a brief, friendly summary."
+			statusPrompt := cfg.Bot.StatusPrompt
 			response, err := bot.Chat(ctx, sessionID, statusPrompt)
 			if err != nil {
 				slog.Error("Status check failed", "sessionID", sessionID, "error", err)
