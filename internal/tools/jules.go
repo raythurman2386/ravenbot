@@ -12,7 +12,7 @@ import (
 
 // GithubRepoContext provides context for a GitHub repository.
 type GithubRepoContext struct {
-	StartingBranch string `json:"startingBranch,omitempty"`
+	StartingBranch *string `json:"startingBranch,omitempty"`
 }
 
 // SourceContext specifies the source repository for a Jules session.
@@ -52,10 +52,8 @@ func DelegateToJules(ctx context.Context, apiKey, repo, task string) (string, er
 	payload := JulesSessionRequest{
 		Prompt: task,
 		SourceContext: SourceContext{
-			Source: fmt.Sprintf("sources/github/%s/%s", owner, repoName),
-			GithubRepoContext: &GithubRepoContext{
-				StartingBranch: "main",
-			},
+			Source:            fmt.Sprintf("sources/github/%s/%s", owner, repoName),
+			GithubRepoContext: &GithubRepoContext{}, // omitempty handles nil StartingBranch
 		},
 		Title:               fmt.Sprintf("ravenbot Task: %s", truncateString(task, 50)),
 		RequirePlanApproval: false, // Auto-approve for autonomous operation
