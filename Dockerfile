@@ -31,15 +31,13 @@ RUN apk add --no-cache \
     ttf-freefont \
     nodejs \
     npm \
-    git \
-    docker-cli
+    git
 
 # Pre-install MCP servers for performance
 RUN npm install -g @modelcontextprotocol/server-filesystem \
     @cyanheads/git-mcp-server \
     @modelcontextprotocol/server-github \
     @modelcontextprotocol/server-memory \
-    mcp-server-docker \
     @modelcontextprotocol/server-sequential-thinking
 
 # Set Chrome path for chromedp
