@@ -32,9 +32,9 @@ func (d *DiscordNotifier) Send(ctx context.Context, message string) error {
 	const limit = 1900
 
 	chunks := splitMessage(message, limit)
-	for _, chunk := range chunks {
+	for i, chunk := range chunks {
 		if _, err := d.session.ChannelMessageSend(d.channelID, chunk); err != nil {
-			return fmt.Errorf("failed to send discord message: %w", err)
+			return fmt.Errorf("failed to send discord message chunk %d/%d to channel %s: %w", i+1, len(chunks), d.channelID, err)
 		}
 	}
 
