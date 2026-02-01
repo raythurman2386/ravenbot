@@ -16,7 +16,6 @@ services:
     working_dir: /src
     volumes:
       - .:/src
-      - /var/run/docker.sock:/var/run/docker.sock
       - ./daily_logs:/app/daily_logs
       - ./data:/app/data
     logging:

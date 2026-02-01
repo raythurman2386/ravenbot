@@ -9,13 +9,6 @@
                 "/app"
             ]
         },
-        "docker": {
-            "command": "npx",
-            "args": [
-                "-y",
-                "mcp-server-docker"
-            ]
-        },
         "sequential-thinking": {
             "command": "npx",
             "args": [
