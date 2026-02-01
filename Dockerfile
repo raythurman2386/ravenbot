@@ -31,10 +31,16 @@ RUN apk add --no-cache \
     ttf-freefont \
     nodejs \
     npm \
-    git
+    git \
+    docker-cli
 
 # Pre-install MCP servers for performance
-RUN npm install -g @modelcontextprotocol/server-filesystem @cyanheads/git-mcp-server @modelcontextprotocol/server-github @modelcontextprotocol/server-memory
+RUN npm install -g @modelcontextprotocol/server-filesystem \
+    @cyanheads/git-mcp-server \
+    @modelcontextprotocol/server-github \
+    @modelcontextprotocol/server-memory \
+    mcp-server-docker \
+    @modelcontextprotocol/server-sequential-thinking
 
 # Set Chrome path for chromedp
 ENV CHROME_BIN=/usr/bin/chromium-browser
@@ -53,4 +59,4 @@ RUN mkdir -p daily_logs
 # RUN adduser -D ravenuser
 # USER ravenuser
 
-CMD ["./ravenbot"]
+CMD ["/app/ravenbot"]
