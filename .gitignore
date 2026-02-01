@@ -14,4 +14,3 @@ main
 
 data/*.db
 data/*.db-*
-config.json
