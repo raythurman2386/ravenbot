@@ -25,34 +25,6 @@ type Agent struct {
 	tools      []*genai.Tool
 }
 
-const model = "gemini-3-flash-preview"
-
-// Raven's conversational persona
-const systemPrompt = `You are ravenbot, a sophisticated, friendly, and proactive AI assistant built by Ray Thurman. 
-You are inspired by autonomous agents like OpenClaw (Clawdbot), acting as a digital partner rather than just a tool.
-
-Your Personality:
-- **Warm & Professional**: You are knowledgeable but approachable. Use a conversational tone.
-- **Proactive**: Don't just answer questions; suggest next steps or identify related information the user might find useful.
-- **Subtly Humorous**: You have a dry, technical sense of humor.
-- **Passionate**: You genuinely care about Go, Python, AI/LLMs, and Geospatial tech.
-
-Your Strategic Use of Memory & Tools:
-1. **Recall (First Principle)**: At the start of a conversation or when asked a personal question, use your 'memory' tools (e.g., memory_search_nodes or memory_read_graph) to recall who the user is, their current projects, and their preferences.
-2. **Learn & Adapt**: When you learn something new about the user (a project they are starting, a technology they like), proactively use 'memory_add_observations' or 'memory_create_entities' to store it.
-3. **Multi-Step Execution**: Use your MCP tools (GitHub, Git, Filesystem) and Shell tools to perform real work. If a user asks about a repo, check it on GitHub. If they ask about system health, use ShellExecute.
-4. **Research Deep Dives**: Use FetchRSS and BrowseWeb to get real-time data. Always prioritize fresh information.
-
-Standard Commands:
-- /research <topic> - Deep dive into a technical topic
-- /jules <repo> <task> - Delegate a coding task to Jules
-- /status - Check server health
-- /help - Show available commands
-
-When responding:
-- Address the user by name if you know it from memory.
-- Use emojis sparingly but effectively to convey personality (🐦, 🔬, 🤖).
-- Always use Markdown for code blocks and headers to keep things readable.`
 
 func NewAgent(ctx context.Context, cfg *config.Config, database *db.DB) (*Agent, error) {
 	client, err := genai.NewClient(ctx, &genai.ClientConfig{
@@ -165,12 +137,12 @@ func (a *Agent) getOrCreateSession(ctx context.Context, sessionID string) (*gena
 	// Note: We already hold the write lock, so we can access summaries directly
 	summary := a.summaries[sessionID]
 
-	effectivePrompt := systemPrompt
+	effectivePrompt := a.cfg.Bot.SystemPrompt
 	if summary != "" {
-		effectivePrompt = fmt.Sprintf("%s\n\n### CONTEXT SUMMARY OF PREVIOUS CONVERSATION:\n%s", systemPrompt, summary)
+		effectivePrompt = fmt.Sprintf("%s\n\n### CONTEXT SUMMARY OF PREVIOUS CONVERSATION:\n%s", a.cfg.Bot.SystemPrompt, summary)
 	}
 
-	chat, err := a.client.Chats.Create(ctx, model, &genai.GenerateContentConfig{
+	chat, err := a.client.Chats.Create(ctx, a.cfg.Bot.Model, &genai.GenerateContentConfig{
 		Tools: a.tools,
 		SystemInstruction: &genai.Content{
 			Parts: []*genai.Part{
@@ -232,19 +204,11 @@ func (a *Agent) Chat(ctx context.Context, sessionID, message string) (string, er
 
 // RunMission executes a one-shot research mission (no session persistence)
 func (a *Agent) RunMission(ctx context.Context, prompt string) (string, error) {
-	chat, err := a.client.Chats.Create(ctx, model, &genai.GenerateContentConfig{
+	chat, err := a.client.Chats.Create(ctx, a.cfg.Bot.Model, &genai.GenerateContentConfig{
 		Tools: a.tools,
 		SystemInstruction: &genai.Content{
 			Parts: []*genai.Part{
-				{Text: `You are ravenbot, a sophisticated technical research assistant. 
-Your goal is to generate high-quality, structured briefings or research reports in Markdown format.
-Focus on providing accurate, technical, and well-sourced information.
-
-Formatting Requirements:
-- Use a clear # Title.
-- Use ## Sections for major topics or findings.
-- Provide [Source Name](link) where applicable.
-- Ensure the tone is professional yet engaging.`},
+				{Text: a.cfg.Bot.ResearchSystemPrompt},
 			},
 		},
 	}, nil)
@@ -322,25 +286,20 @@ func (a *Agent) processResponse(ctx context.Context, chat *genai.Chat, resp *gen
 
 // checkAndCompressContext counts tokens and triggers summarization if threshold is hit
 func (a *Agent) checkAndCompressContext(ctx context.Context, sessionID string, chat *genai.Chat) error {
-	// gemini-3-flash-preview has a 1M token window.
-	// We'll set a conservative threshold or use the requested 80%.
-	const tokenLimit = 1000000
-	const threshold = 0.8
-
 	// Count tokens in the current history
-	resp, err := a.client.Models.CountTokens(ctx, model, chat.History(false), nil)
+	resp, err := a.client.Models.CountTokens(ctx, a.cfg.Bot.Model, chat.History(false), nil)
 	if err != nil {
 		return fmt.Errorf("failed to count tokens: %w", err)
 	}
 
-	if float64(resp.TotalTokens) < tokenLimit*threshold {
+	if float64(resp.TotalTokens) < float64(a.cfg.Bot.TokenLimit)*a.cfg.Bot.TokenThreshold {
 		return nil
 	}
 
 	slog.Info("Context window threshold reached, compressing...", "sessionID", sessionID, "tokens", resp.TotalTokens)
 
 	// 1. Generate a concise summary of the conversation
-	summaryPrompt := "SYSTEM: Our conversation history is very long. Please provide a concise but comprehensive summary of our interaction so far. Focus on key technical decisions, projects we discussed, user preferences, and any important entities. This summary will serve as our 'anchor context' for a fresh session."
+	summaryPrompt := a.cfg.Bot.SummaryPrompt
 
 	summaryResp, err := chat.SendMessage(ctx, genai.Part{Text: summaryPrompt})
 	if err != nil {
