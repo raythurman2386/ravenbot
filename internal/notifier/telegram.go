@@ -3,14 +3,16 @@ package notifier
 import (
 	"context"
 	"fmt"
+	"strings"
 	"time"
 
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 )
 
 type TelegramNotifier struct {
-	bot    *tgbotapi.BotAPI
-	chatID int64
+	bot      *tgbotapi.BotAPI
+	chatID   int64
+	username string
 }
 
 func NewTelegramNotifier(token string, chatID int64) (*TelegramNotifier, error) {
@@ -18,7 +20,11 @@ func NewTelegramNotifier(token string, chatID int64) (*TelegramNotifier, error) 
 	if err != nil {
 		return nil, fmt.Errorf("failed to initialize telegram bot: %w", err)
 	}
-	return &TelegramNotifier{bot: bot, chatID: chatID}, nil
+	return &TelegramNotifier{
+		bot:      bot,
+		chatID:   chatID,
+		username: bot.Self.UserName,
+	}, nil
 }
 
 func (t *TelegramNotifier) Send(ctx context.Context, message string) error {
@@ -31,7 +37,11 @@ func (t *TelegramNotifier) Send(ctx context.Context, message string) error {
 		msg.ParseMode = tgbotapi.ModeMarkdown
 
 		if _, err := t.bot.Send(msg); err != nil {
-			return fmt.Errorf("failed to send telegram message: %w", err)
+			// Fallback to plain text if Markdown fails
+			msg.ParseMode = ""
+			if _, err := t.bot.Send(msg); err != nil {
+				return fmt.Errorf("failed to send telegram message (even without markdown): %w", err)
+			}
 		}
 	}
 
@@ -87,7 +97,30 @@ func (t *TelegramNotifier) StartListener(ctx context.Context, handler func(chatI
 				continue
 			}
 
-			handler(update.Message.Chat.ID, update.Message.Text)
+			text := update.Message.Text
+			if update.Message.IsCommand() {
+				// Strip bot username from command (e.g., /status@botname -> /status)
+				if i := strings.Index(text, "@"); i != -1 {
+					spaceIdx := strings.Index(text, " ")
+					if spaceIdx == -1 || i < spaceIdx {
+						cmdPart := text[:i]
+						usernamePart := ""
+						if spaceIdx == -1 {
+							usernamePart = text[i+1:]
+							if usernamePart == t.username {
+								text = cmdPart
+							}
+						} else {
+							usernamePart = text[i+1 : spaceIdx]
+							if usernamePart == t.username {
+								text = cmdPart + text[spaceIdx:]
+							}
+						}
+					}
+				}
+			}
+
+			handler(update.Message.Chat.ID, text)
 		}
 	}
 }

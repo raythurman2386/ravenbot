@@ -143,29 +143,31 @@ func main() {
 		}
 
 		// Handle special commands first
+		lowerText := strings.ToLower(text)
 		switch {
-		case text == "/help":
+		case lowerText == "/help" || strings.HasPrefix(lowerText, "/help "):
 			reply(helpMessage)
 			return
 
-		case text == "/status":
+		case lowerText == "/status" || strings.HasPrefix(lowerText, "/status "):
 			reply("🔍 Checking server health...")
 			statusPrompt := "Run system health checks using the ShellExecute tool. Check disk space (df -h), memory (free -h), and uptime. Provide a brief, friendly summary."
 			response, err := bot.Chat(ctx, sessionID, statusPrompt)
 			if err != nil {
-				reply(fmt.Sprintf("❌ Status check failed: %v", err))
+				slog.Error("Status check failed", "sessionID", sessionID, "error", err)
+				reply(fmt.Sprintf("❌ Status check failed. I couldn't retrieve the system health metrics: %v", err))
 				return
 			}
 			reply(response)
 			return
 
-		case text == "/reset":
+		case lowerText == "/reset" || strings.HasPrefix(lowerText, "/reset "):
 			bot.ClearSession(sessionID)
 			reply("🔄 Conversation cleared! Let's start fresh.")
 			return
 
-		case strings.HasPrefix(text, "/research "):
-			topic := strings.TrimSpace(strings.TrimPrefix(text, "/research"))
+		case strings.HasPrefix(lowerText, "/research "):
+			topic := strings.TrimSpace(text[len("/research"):])
 			if topic == "" {
 				reply("Please provide a topic. Usage: `/research <topic>`")
 				return
@@ -174,7 +176,8 @@ func main() {
 			prompt := fmt.Sprintf("Research the following topic in depth and provide a technical report: %s", topic)
 			report, err := bot.RunMission(ctx, prompt)
 			if err != nil {
-				reply(fmt.Sprintf("❌ Research failed: %v", err))
+				slog.Error("Research failed", "topic", topic, "error", err)
+				reply(fmt.Sprintf("❌ Research failed. I couldn't complete the research mission: %v", err))
 				return
 			}
 			if err := database.SaveBriefing(ctx, report); err != nil {
@@ -183,8 +186,8 @@ func main() {
 			reply(report)
 			return
 
-		case strings.HasPrefix(text, "/jules "):
-			parts := strings.Fields(strings.TrimPrefix(text, "/jules"))
+		case strings.HasPrefix(lowerText, "/jules "):
+			parts := strings.Fields(text[len("/jules"):])
 			if len(parts) < 2 {
 				reply("Usage: `/jules <owner/repo> <task description>`")
 				return
@@ -195,7 +198,8 @@ func main() {
 			prompt := fmt.Sprintf("Use the JulesTask tool to delegate this coding task to Jules for the repository %s: %s", repo, task)
 			response, err := bot.Chat(ctx, sessionID, prompt)
 			if err != nil {
-				reply(fmt.Sprintf("❌ Jules delegation failed: %v", err))
+				slog.Error("Jules delegation failed", "repo", repo, "task", task, "error", err)
+				reply(fmt.Sprintf("❌ Jules delegation failed. I couldn't hand off the task to Jules: %v", err))
 				return
 			}
 			reply(response)
