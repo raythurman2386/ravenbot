@@ -2,66 +2,125 @@ package agent
 
 import (
 	"context"
+	"testing"
+
 	"github.com/raythurman2386/ravenbot/internal/config"
 	"github.com/raythurman2386/ravenbot/internal/db"
-	"net/http"
-	"net/http/httptest"
-	"testing"
+	"github.com/raythurman2386/ravenbot/internal/mcp"
+	"github.com/raythurman2386/ravenbot/internal/tools"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"google.golang.org/genai"
+	"google.golang.org/adk/session"
 )
 
-func TestHandleToolCall(t *testing.T) {
-	// Mock server for tool execution
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusOK)
-		_, _ = w.Write([]byte("mock response"))
-	}))
-	defer server.Close()
+func TestGetRavenTools(t *testing.T) {
+	a := &Agent{
+		cfg: &config.Config{
+			JulesAPIKey: "test-key",
+		},
+	}
+	toolsList := a.GetRavenTools()
+	assert.NotEmpty(t, toolsList)
 
+	for _, tool := range toolsList {
+		t.Logf("Found tool: %s", tool.Name())
+	}
+
+	expectedNames := []string{
+		"FetchRSS",
+		"ScrapePage",
+		"ShellExecute",
+		"BrowseWeb",
+		"JulesTask",
+		"google_search", // Changed from GoogleSearch
+		"ReadMCPResource",
+	}
+
+	for _, name := range expectedNames {
+		found := false
+		for _, tool := range toolsList {
+			if tool == nil {
+				t.Fatalf("Found nil tool in list when looking for %s", name)
+			}
+			if tool.Name() == name {
+				found = true
+				break
+			}
+		}
+		assert.True(t, found, "Tool %s not found", name)
+	}
+}
+
+func TestGetMCPTools(t *testing.T) {
 	ctx := context.Background()
 
-	// Setup mock DB for tests
+	// Test the logic with an empty client map
+	a := &Agent{
+		mcpClients: make(map[string]*mcp.Client),
+	}
+
+	mcpTools := a.GetMCPTools(ctx)
+	assert.Empty(t, mcpTools)
+}
+
+func TestDeduplicationToolLogic(t *testing.T) {
+	ctx := context.Background()
 	database, err := db.InitDB(":memory:")
 	require.NoError(t, err)
 	defer database.Close()
 
-	// Setup mock Agent
-	a := &Agent{
-		cfg: &config.Config{GeminiAPIKey: "test"},
-		db:  database,
+	a := &Agent{db: database}
+
+	// This tests the deduplicateRSSItems helper used by the FetchRSS tool
+	err = a.db.AddHeadline(ctx, "Test Title", "https://example.com/item1")
+	require.NoError(t, err)
+
+	items := []tools.RSSItem{
+		{Title: "Title 1", Link: "https://example.com/item1"}, // Duplicate
+		{Title: "Title 2", Link: "https://example.com/item2"}, // New
 	}
 
-	t.Run("FetchRSS", func(t *testing.T) {
-		call := &genai.FunctionCall{
-			Name: "FetchRSS",
-			Args: map[string]any{"url": server.URL},
-		}
-		// Since FetchRSS returns a slice of items, and the server returns a non-RSS response,
-		// it might error, but we're testing the routing here.
-		// Actually, let's just check if it returns without crashing and reaches the right case.
-		_, err := a.handleToolCall(ctx, call)
-		assert.Error(t, err) // Expecting error due to invalid RSS in mock server
-	})
+	newItems, err := a.deduplicateRSSItems(ctx, items)
+	assert.NoError(t, err)
+	assert.Len(t, newItems, 1)
+	assert.Equal(t, "https://example.com/item2", newItems[0].Link)
+}
 
-	t.Run("ScrapePage", func(t *testing.T) {
-		call := &genai.FunctionCall{
-			Name: "ScrapePage",
-			Args: map[string]any{"url": server.URL},
-		}
-		result, err := a.handleToolCall(ctx, call)
-		assert.NoError(t, err)
-		assert.Equal(t, "mock response", result)
-	})
+func TestClearSession(t *testing.T) {
+	service := session.InMemoryService()
+	a := &Agent{sessionService: service}
 
-	t.Run("Unknown", func(t *testing.T) {
-		call := &genai.FunctionCall{
-			Name: "UnknownTool",
-		}
-		result, err := a.handleToolCall(ctx, call)
-		assert.Error(t, err)
-		assert.Nil(t, result)
+	ctx := context.Background()
+	userID := "default-user"
+	sessionID := "test-session"
+	appName := AppName
+
+	// Create a session
+	_, err := service.Create(ctx, &session.CreateRequest{
+		UserID:    userID,
+		SessionID: sessionID,
+		AppName:   appName,
 	})
+	require.NoError(t, err)
+
+	// Verify it exists
+	resp, err := service.Get(ctx, &session.GetRequest{
+		UserID:    userID,
+		SessionID: sessionID,
+		AppName:   appName,
+	})
+	assert.NoError(t, err)
+	assert.NotNil(t, resp.Session)
+
+	// Clear it
+	a.ClearSession(sessionID)
+
+	// Verify it's gone
+	_, err = service.Get(ctx, &session.GetRequest{
+		UserID:    userID,
+		SessionID: sessionID,
+		AppName:   appName,
+	})
+	assert.Error(t, err)
 }

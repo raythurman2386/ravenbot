@@ -10,12 +10,13 @@ require (
 	github.com/mmcdole/gofeed v1.3.0
 	github.com/raythurman2386/cronlib v0.1.0
 	github.com/stretchr/testify v1.11.1
+	google.golang.org/adk v0.2.0
 	google.golang.org/genai v1.44.0
 	modernc.org/sqlite v1.44.3
 )
 
 require (
-	cloud.google.com/go v0.116.0 // indirect
+	cloud.google.com/go v0.123.0 // indirect
 	cloud.google.com/go/auth v0.18.1 // indirect
 	cloud.google.com/go/compute/metadata v0.9.0 // indirect
 	github.com/andybalholm/cascadia v1.3.3 // indirect
@@ -32,7 +33,9 @@ require (
 	github.com/gobwas/pool v0.2.1 // indirect
 	github.com/gobwas/ws v1.4.0 // indirect
 	github.com/google/go-cmp v0.7.0 // indirect
+	github.com/google/jsonschema-go v0.3.0 // indirect
 	github.com/google/s2a-go v0.1.9 // indirect
+	github.com/google/safehtml v0.1.0 // indirect
 	github.com/google/uuid v1.6.0 // indirect
 	github.com/googleapis/enterprise-certificate-proxy v0.3.11 // indirect
 	github.com/googleapis/gax-go/v2 v2.16.0 // indirect
@@ -46,9 +49,10 @@ require (
 	github.com/pmezard/go-difflib v1.0.0 // indirect
 	github.com/remyoudompheng/bigfft v0.0.0-20230129092748-24d4a6f8daec // indirect
 	go.opentelemetry.io/auto/sdk v1.2.1 // indirect
-	go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp v0.61.0 // indirect
+	go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp v0.63.0 // indirect
 	go.opentelemetry.io/otel v1.39.0 // indirect
 	go.opentelemetry.io/otel/metric v1.39.0 // indirect
+	go.opentelemetry.io/otel/sdk v1.39.0 // indirect
 	go.opentelemetry.io/otel/trace v1.39.0 // indirect
 	golang.org/x/crypto v0.47.0 // indirect
 	golang.org/x/exp v0.0.0-20251023183803-a4bb9ffd2546 // indirect
@@ -62,4 +66,6 @@ require (
 	modernc.org/libc v1.67.6 // indirect
 	modernc.org/mathutil v1.7.1 // indirect
 	modernc.org/memory v1.11.0 // indirect
+	rsc.io/omap v1.2.0 // indirect
+	rsc.io/ordered v1.1.1 // indirect
 )
