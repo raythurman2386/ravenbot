@@ -3,6 +3,7 @@ package agent
 import (
 	"context"
 	"fmt"
+	"iter"
 	"log/slog"
 	"strings"
 	"sync"
@@ -168,11 +169,13 @@ func (a *Agent) compressContext(sessionID string) {
 // ClearSession removes a chat session (useful for /reset command)
 func (a *Agent) ClearSession(sessionID string) {
 	userID := "default-user"
-	a.sessionService.Delete(context.Background(), &session.DeleteRequest{
+	if err := a.sessionService.Delete(context.Background(), &session.DeleteRequest{
 		AppName:   AppName,
 		UserID:    userID,
 		SessionID: sessionID,
-	})
+	}); err != nil {
+		slog.Error("Failed to delete session", "sessionID", sessionID, "error", err)
+	}
 }
 
 // Chat handles conversational messages with session persistence
@@ -185,26 +188,7 @@ func (a *Agent) Chat(ctx context.Context, sessionID, message string) (string, er
 		Parts: []*genai.Part{{Text: message}},
 	}, agent.RunConfig{})
 
-	var lastText strings.Builder
-	for event, err := range events {
-		if err != nil {
-			return "", fmt.Errorf("ADK runner error: %w", err)
-		}
-		if event.Content != nil {
-			for _, part := range event.Content.Parts {
-				if part.Text != "" {
-					lastText.WriteString(part.Text)
-				}
-			}
-		}
-	}
-
-	response := strings.TrimSpace(lastText.String())
-	if response == "" {
-		return "", fmt.Errorf("no response from ADK agent")
-	}
-
-	return response, nil
+	return a.consumeRunnerEvents(events)
 }
 
 // RunMission executes a one-shot research mission (no session persistence)
@@ -236,13 +220,18 @@ func (a *Agent) RunMission(ctx context.Context, prompt string) (string, error) {
 		Parts: []*genai.Part{{Text: prompt}},
 	}, agent.RunConfig{})
 
+	return a.consumeRunnerEvents(events)
+}
+
+// consumeRunnerEvents processes the event stream from the ADK runner
+func (a *Agent) consumeRunnerEvents(events iter.Seq2[*session.Event, error]) (string, error) {
 	var lastText strings.Builder
 	for event, err := range events {
 		if err != nil {
-			return "", err
+			return "", fmt.Errorf("ADK runner error: %w", err)
 		}
-		if event.Content != nil {
-			for _, part := range event.Content.Parts {
+		if event.LLMResponse.Content != nil {
+			for _, part := range event.LLMResponse.Content.Parts {
 				if part.Text != "" {
 					lastText.WriteString(part.Text)
 				}
@@ -250,5 +239,10 @@ func (a *Agent) RunMission(ctx context.Context, prompt string) (string, error) {
 		}
 	}
 
-	return strings.TrimSpace(lastText.String()), nil
+	response := strings.TrimSpace(lastText.String())
+	if response == "" {
+		return "", fmt.Errorf("no response from ADK agent")
+	}
+
+	return response, nil
 }
