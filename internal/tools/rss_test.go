@@ -10,6 +10,8 @@ import (
 )
 
 func TestFetchRSS(t *testing.T) {
+	t.Setenv("ALLOW_LOCAL_URLS", "true")
+
 	// Mock RSS feed content
 	rssContent := `<?xml version="1.0" encoding="UTF-8" ?>
 <rss version="2.0">

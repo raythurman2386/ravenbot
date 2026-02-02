@@ -15,6 +15,10 @@ type RSSItem struct {
 }
 
 func FetchRSS(ctx context.Context, url string) ([]RSSItem, error) {
+	if err := ValidateURL(url); err != nil {
+		return nil, fmt.Errorf("security validation failed for RSS URL: %w", err)
+	}
+
 	fp := gofeed.NewParser()
 	feed, err := fp.ParseURLWithContext(url, ctx)
 	if err != nil {

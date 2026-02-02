@@ -1,0 +1,4 @@
+## 2025-01-31 - SSRF protection for web-fetching tools
+**Vulnerability:** The agent's tools (`FetchRSS`, `ScrapePage`, `BrowseWeb`) accepted any URL and fetched its content without validation. This allowed an attacker to perform Server-Side Request Forgery (SSRF) to access internal services (e.g., cloud metadata APIs, local services).
+**Learning:** AI agents that can browse the web are particularly susceptible to SSRF because they often take user-provided URLs or URLs found during search. Standard libraries for fetching data usually do not block local/private IP addresses by default.
+**Prevention:** Always validate URLs before fetching. Resolve the hostname to IP addresses and check if they fall into private, loopback, or link-local ranges. Use a centralized validation utility to ensure consistency across all tools.

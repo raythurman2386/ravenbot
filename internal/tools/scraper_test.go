@@ -10,6 +10,8 @@ import (
 )
 
 func TestScrapePage(t *testing.T) {
+	t.Setenv("ALLOW_LOCAL_URLS", "true")
+
 	htmlContent := `
 	<html>
 		<head><title>Test Page</title></head>

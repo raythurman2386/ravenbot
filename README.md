@@ -21,7 +21,7 @@ Equipped with a **Gemini 3 Pro** brain, ravenbot can browse the web, execute sys
 - **Two-Way Comms**: Interactive listeners for **Telegram**, **Discord**, and **CLI**.
   - `/research <topic>` - Trigger a deep-dive research mission on any subject.
   - `/jules <repo> <task>` - Delegate complex coding or repository tasks to the **Jules Agent API**.
-- **Secure by Design**: Restricted message processing to authorized Chat/Channel IDs.
+- **Secure by Design**: Restricted message processing to authorized IDs and SSRF protection for all web tools.
 
 ### 💾 Persistence & Memory
 - **SQLite Engine**: Tracks headlines to ensure you never receive duplicate news.

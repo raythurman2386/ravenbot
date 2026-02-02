@@ -14,6 +14,8 @@ import (
 )
 
 func TestHandleToolCall(t *testing.T) {
+	t.Setenv("ALLOW_LOCAL_URLS", "true")
+
 	// Mock server for tool execution
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)

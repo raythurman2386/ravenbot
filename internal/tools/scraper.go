@@ -10,6 +10,10 @@ import (
 )
 
 func ScrapePage(ctx context.Context, url string) (string, error) {
+	if err := ValidateURL(url); err != nil {
+		return "", fmt.Errorf("security validation failed for scrape URL: %w", err)
+	}
+
 	req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
 	if err != nil {
 		return "", fmt.Errorf("failed to create request: %w", err)
