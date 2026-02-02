@@ -1,6 +1,6 @@
 # 🦅 ravenbot: Autonomous Technical Research Agent
 
-ravenbot is a high-performance, self-hosted autonomous AI agent built in **Go 1.25+**. It functions as a proactive technical assistant that researches the latest trends in Golang, AI/LLM, and Geospatial Engineering, delivering high-quality briefings directly to your pocket.
+ravenbot is a high-performance, self-hosted autonomous AI agent built in **Go 1.25+** using the **Google Agent Development Kit (ADK)**. It functions as a proactive technical assistant that researches the latest trends in Golang, AI/LLM, and Geospatial Engineering, delivering high-quality briefings directly to your pocket.
 
 Equipped with a **Gemini 3 Pro** brain, ravenbot can browse the web, execute system commands, and even delegate complex repository tasks to the **Gemini Jules Agent**.
 
@@ -9,8 +9,9 @@ Equipped with a **Gemini 3 Pro** brain, ravenbot can browse the web, execute sys
 ## 🚀 Key Features
 
 ### 🧠 Advanced Intelligence
-- **Native AI Power**: Driven by Google's `gemini-3-flash-preview` with native function calling and multi-turn reasoning.
+- **Native AI Power**: Powered by the **Google ADK for Go**, utilizing **Gemini 3 Pro** with enhanced reliability and agentic capabilities.
 - **Smart Tools**: Equipped with a professional toolbelt:
+  - **GoogleSearch**: Native, integrated Google Search tool for ground-truth verification.
   - **FetchRSS**: Real-time news gathering from technical sources.
   - **ScrapePage**: High-fidelity text extraction from technical articles.
   - **BrowseWeb**: A headless browser pilot (`chromedp`) for JS-heavy dynamic websites.
@@ -32,11 +33,14 @@ Equipped with a **Gemini 3 Pro** brain, ravenbot can browse the web, execute sys
 ## 🛠 Tech Stack
 
 - **Core**: Go 1.25+
-- **Brain**: [google.golang.org/genai](https://github.com/googleapis/go-genai) (Gemini 3 Pro)
+- **Framework**: [google.golang.org/adk](https://pkg.go.dev/google.golang.org/adk) (Google ADK)
+- **Brain**: Gemini 3 Pro (via ADK)
 - **Scheduler**: [github.com/raythurman2386/cronlib](https://github.com/raythurman2386/cronlib)
 - **Browser**: `chromedp`
 - **Database**: `modernc.org/sqlite` (CGO-free)
 - **Infrastructure**: Docker & Docker Compose (Optimized for ARM64/Raspberry Pi 5)
+
+This transition to the Google ADK provides improved reliability, streamlined tool orchestration, and enhanced agentic capabilities.
 
 ---
 

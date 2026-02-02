@@ -5,12 +5,13 @@ ravenbot is an autonomous technical research agent built in Go 1.25+. It leverag
 ## Project Overview
 
 -   **Language:** Go (1.25+)
--   **AI Engine:** Google Gemini 3 Pro (`google.golang.org/genai`)
--   **Architecture:** Modular agent with tool use, scheduling, and persistence.
+-   **AI Engine:** Google Gemini 3 Pro (via Google ADK)
+-   **Architecture:** Built on the Google ADK for Go, enabling streamlined tool orchestration and robust agentic behaviors.
 -   **Deployment:** Docker & Docker Compose (Optimized for ARM64/Raspberry Pi 5).
 
 ## Key Features
 
+-   **Native Search:** Integrated Google Search tool via ADK.
 -   **Autonomous Research:** Browses the web using `chromedp` and scrapes content with `goquery`.
 -   **Multi-Channel Notifications:** Sends briefings to Telegram and Discord.
 -   **Interactive:** Responds to `/research` and `/jules` commands via chat or CLI.
