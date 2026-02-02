@@ -20,35 +20,35 @@ func TestGetRavenTools(t *testing.T) {
 			JulesAPIKey: "test-key",
 		},
 	}
-	toolsList := a.GetRavenTools()
-	assert.NotEmpty(t, toolsList)
 
-	for _, tool := range toolsList {
-		t.Logf("Found tool: %s", tool.Name())
-	}
-
-	expectedNames := []string{
-		"FetchRSS",
-		"ScrapePage",
-		"ShellExecute",
-		"BrowseWeb",
-		"JulesTask",
-		"google_search", // Changed from GoogleSearch
-		"ReadMCPResource",
-	}
-
-	for _, name := range expectedNames {
+	// Test Technical Tools
+	techTools := a.GetTechnicalTools()
+	assert.NotEmpty(t, techTools)
+	techNames := []string{"FetchRSS", "ScrapePage", "ShellExecute", "BrowseWeb", "WebSearch"}
+	for _, name := range techNames {
 		found := false
-		for _, tool := range toolsList {
-			if tool == nil {
-				t.Fatalf("Found nil tool in list when looking for %s", name)
-			}
+		for _, tool := range techTools {
 			if tool.Name() == name {
 				found = true
 				break
 			}
 		}
-		assert.True(t, found, "Tool %s not found", name)
+		assert.True(t, found, "Technical tool %s not found", name)
+	}
+
+	// Test Core Tools
+	coreTools := a.GetCoreTools()
+	assert.NotEmpty(t, coreTools)
+	coreNames := []string{"JulesTask", "ReadMCPResource"}
+	for _, name := range coreNames {
+		found := false
+		for _, tool := range coreTools {
+			if tool.Name() == name {
+				found = true
+				break
+			}
+		}
+		assert.True(t, found, "Core tool %s not found", name)
 	}
 }
 

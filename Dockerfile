@@ -19,7 +19,8 @@ RUN CGO_ENABLED=0 GOOS=linux go build -o ravenbot ./cmd/bot/main.go
 # Final stage
 FROM alpine:latest
 
-# Install certificates, timezone data, Chromium for headless browsing, and Node.js for MCP servers
+# Install certificates, timezone data, Chromium for headless browsing, Node.js for MCP servers,
+# and development/diagnostic tools (Docker, Go, Build tools, Curl)
 RUN apk add --no-cache \
     ca-certificates \
     tzdata \
@@ -31,7 +32,12 @@ RUN apk add --no-cache \
     ttf-freefont \
     nodejs \
     npm \
-    git
+    git \
+    docker-cli \
+    go \
+    build-base \
+    curl \
+    procps
 
 # Pre-install MCP servers for performance
 RUN npm install -g @modelcontextprotocol/server-filesystem \
@@ -53,8 +59,11 @@ COPY --from=builder /app/config.json* ./
 # Create directory for logs
 RUN mkdir -p daily_logs
 
-# Use a non-root user (optional but recommended)
-RUN adduser -D ravenuser
+# Setup docker permissions and user
+RUN addgroup -g 1001 docker && \
+    adduser -D ravenuser && \
+    addgroup ravenuser docker
+
 USER ravenuser
 
 CMD ["/app/ravenbot"]

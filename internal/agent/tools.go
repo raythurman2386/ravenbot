@@ -12,12 +12,11 @@ import (
 	"github.com/google/jsonschema-go/jsonschema"
 	"google.golang.org/adk/tool"
 	"google.golang.org/adk/tool/functiontool"
-	"google.golang.org/adk/tool/geminitool"
 )
 
-// GetRavenTools returns the list of ADK tools for the agent.
-func (a *Agent) GetRavenTools() []tool.Tool {
-	var ravenTools []tool.Tool
+// GetTechnicalTools returns the list of tools intended for the ResearchAssistant sub-agent.
+func (a *Agent) GetTechnicalTools() []tool.Tool {
+	var technicalTools []tool.Tool
 
 	// FetchRSS Tool
 	type FetchRSSArgs struct {
@@ -33,10 +32,8 @@ func (a *Agent) GetRavenTools() []tool.Tool {
 		}
 		return a.deduplicateRSSItems(ctx, items)
 	})
-	if err != nil {
-		slog.Error("Failed to create FetchRSS tool", "error", err)
-	} else {
-		ravenTools = append(ravenTools, fetchRSSTool)
+	if err == nil {
+		technicalTools = append(technicalTools, fetchRSSTool)
 	}
 
 	// ScrapePage Tool
@@ -45,48 +42,65 @@ func (a *Agent) GetRavenTools() []tool.Tool {
 	}
 	scrapePageTool, err := functiontool.New(functiontool.Config{
 		Name:        "ScrapePage",
-		Description: "Scrapes the main text content from a webpage URL.",
+		Description: "Extracts textual content from a static webpage URL. Use this for standard HTML pages.",
 	}, func(ctx tool.Context, args ScrapePageArgs) (string, error) {
 		return tools.ScrapePage(ctx, args.URL)
 	})
-	if err != nil {
-		slog.Error("Failed to create ScrapePage tool", "error", err)
-	} else {
-		ravenTools = append(ravenTools, scrapePageTool)
+	if err == nil {
+		technicalTools = append(technicalTools, scrapePageTool)
 	}
 
 	// ShellExecute Tool
+	shellExecutor := tools.NewShellExecutor(a.cfg.AllowedCommands)
 	type ShellExecuteArgs struct {
-		Command string   `json:"command" jsonschema:"The command to run (df, free, uptime, whoami, date)."`
+		Command string   `json:"command" jsonschema:"The command to run (df, free, uptime, whoami, date, hostname, cat, grep, ls, pwd, ps, top, docker, go, git, curl)."`
 		Args    []string `json:"args,omitempty" jsonschema:"The arguments for the command."`
 	}
 	shellExecuteTool, err := functiontool.New(functiontool.Config{
 		Name:        "ShellExecute",
-		Description: "Executes a restricted set of shell commands.",
+		Description: "Executes low-level system commands (df, free, uptime, docker ps, etc.). Use this for basic diagnostics. For GitHub or complex Git tasks, ALWAYS prefer specialized MCP tools if available.",
 	}, func(ctx tool.Context, args ShellExecuteArgs) (string, error) {
-		return tools.ShellExecute(ctx, args.Command, args.Args)
+		return shellExecutor.Execute(ctx, args.Command, args.Args)
 	})
-	if err != nil {
-		slog.Error("Failed to create ShellExecute tool", "error", err)
-	} else {
-		ravenTools = append(ravenTools, shellExecuteTool)
+	if err == nil {
+		technicalTools = append(technicalTools, shellExecuteTool)
 	}
 
 	// BrowseWeb Tool
 	type BrowseWebArgs struct {
-		URL string `json:"url" jsonschema:"The URL of the webpage to browse using a headless browser."`
+		URL string `json:"url" jsonschema:"The URL of the webpage to browse."`
 	}
 	browseWebTool, err := functiontool.New(functiontool.Config{
 		Name:        "BrowseWeb",
-		Description: "Navigates to a URL using a headless browser to extract content from JS-heavy sites.",
+		Description: "Renders a webpage using a headless browser. Use this for JavaScript-heavy or single-page applications.",
 	}, func(ctx tool.Context, args BrowseWebArgs) (string, error) {
 		return tools.BrowseWeb(ctx, args.URL)
 	})
-	if err != nil {
-		slog.Error("Failed to create BrowseWeb tool", "error", err)
-	} else {
-		ravenTools = append(ravenTools, browseWebTool)
+	if err == nil {
+		technicalTools = append(technicalTools, browseWebTool)
 	}
+
+	// WebSearch Tool
+	type WebSearchArgs struct {
+		Query      string `json:"query" jsonschema:"The search query."`
+		MaxResults int    `json:"max_results,omitempty" jsonschema:"Max results (default 5)."`
+	}
+	webSearchTool, err := functiontool.New(functiontool.Config{
+		Name:        "WebSearch",
+		Description: "Searches the web for real-time information and documentation.",
+	}, func(ctx tool.Context, args WebSearchArgs) ([]tools.SearchResult, error) {
+		return tools.DuckDuckGoSearch(ctx, args.Query, args.MaxResults)
+	})
+	if err == nil {
+		technicalTools = append(technicalTools, webSearchTool)
+	}
+
+	return technicalTools
+}
+
+// GetCoreTools returns the tools for the root conversational agent.
+func (a *Agent) GetCoreTools() []tool.Tool {
+	var coreTools []tool.Tool
 
 	// JulesTask Tool
 	type JulesTaskArgs struct {
@@ -95,18 +109,13 @@ func (a *Agent) GetRavenTools() []tool.Tool {
 	}
 	julesTaskTool, err := functiontool.New(functiontool.Config{
 		Name:        "JulesTask",
-		Description: "Delegates a complex coding or repository task to the Gemini Jules Agent.",
+		Description: "Delegates complex coding and repository tasks to the Jules Agent.",
 	}, func(ctx tool.Context, args JulesTaskArgs) (string, error) {
 		return tools.DelegateToJules(ctx, a.cfg.JulesAPIKey, args.Repo, args.Task)
 	})
-	if err != nil {
-		slog.Error("Failed to create JulesTask tool", "error", err)
-	} else {
-		ravenTools = append(ravenTools, julesTaskTool)
+	if err == nil {
+		coreTools = append(coreTools, julesTaskTool)
 	}
-
-	// Native Google Search Tool
-	ravenTools = append(ravenTools, geminitool.GoogleSearch{})
 
 	// ReadMCPResource Tool
 	type ReadMCPResourceArgs struct {
@@ -129,13 +138,11 @@ func (a *Agent) GetRavenTools() []tool.Tool {
 		}
 		return nil, fmt.Errorf("unknown MCP server: %s", args.Server)
 	})
-	if err != nil {
-		slog.Error("Failed to create ReadMCPResource tool", "error", err)
-	} else {
-		ravenTools = append(ravenTools, readResourceTool)
+	if err == nil {
+		coreTools = append(coreTools, readResourceTool)
 	}
 
-	return ravenTools
+	return coreTools
 }
 
 // GetMCPTools dynamically discovers and registers tools from configured MCP servers.

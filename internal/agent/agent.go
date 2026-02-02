@@ -19,6 +19,8 @@ import (
 	"google.golang.org/adk/model/gemini"
 	"google.golang.org/adk/runner"
 	"google.golang.org/adk/session"
+	"google.golang.org/adk/tool"
+	"google.golang.org/adk/tool/functiontool"
 	"google.golang.org/genai"
 )
 
@@ -59,7 +61,7 @@ func NewAgent(ctx context.Context, cfg *config.Config, database *db.DB) (*Agent,
 		adkLLM:     adkLLM,
 	}
 
-	// 2. Initialize MCP Servers
+	// 3. Initialize MCP Servers
 	for name, serverCfg := range cfg.MCPServers {
 		slog.Info("Initializing MCP Server", "name", name, "command", serverCfg.Command)
 		var mcpClient *mcp.Client
@@ -85,16 +87,113 @@ func NewAgent(ctx context.Context, cfg *config.Config, database *db.DB) (*Agent,
 		a.mu.Unlock()
 	}
 
-	// 3. Gather Tools
-	nativeTools := a.GetRavenTools()
-	mcpTools := a.GetMCPTools(ctx)
-	allTools := append(nativeTools, mcpTools...)
+	// 4. Initialize Session Service
+	sessionService := session.InMemoryService()
 
-	// 4. Create ADK LLMAgent
+	// 5. Gather Tools and Create Sub-Agents
+	technicalTools := a.GetTechnicalTools()
+	coreTools := a.GetCoreTools()
+
+	// Categorize MCP Tools
+	mcpTools := a.GetMCPTools(ctx)
+	var rootMCPTools []tool.Tool
+	var researchMCPTools []tool.Tool
+
+	for _, t := range mcpTools {
+		// Memory tools stay in the root agent for personalization
+		if strings.HasPrefix(t.Name(), "memory_") {
+			rootMCPTools = append(rootMCPTools, t)
+		} else {
+			researchMCPTools = append(researchMCPTools, t)
+		}
+	}
+
+	// Create Research Assistant Sub-Agent
+	researchAssistant, err := llmagent.New(llmagent.Config{
+		Name:        "ResearchAssistant",
+		Model:       adkLLM,
+		Description: "A specialized assistant for technical research, web search, system diagnostics, GitHub, and repository management.",
+		Instruction: cfg.Bot.ResearchSystemPrompt,
+		Tools:       append(technicalTools, researchMCPTools...),
+	})
+	if err != nil {
+		return nil, fmt.Errorf("failed to create ResearchAssistant: %w", err)
+	}
+
+	// Wrap Research Assistant as a Tool with a custom implementation to fix streaming output loss in ADK's agenttool
+	type ResearchAssistantArgs struct {
+		Request string `json:"request" jsonschema:"The technical research or diagnostic request."`
+	}
+	researchTool, err := functiontool.New(functiontool.Config{
+		Name:        "ResearchAssistant",
+		Description: "A specialized assistant for technical research, web search, system diagnostics, and shell commands.",
+	}, func(ctx tool.Context, args ResearchAssistantArgs) (map[string]any, error) {
+		// 1. Create sub-session for the research assistant
+		stateMap := make(map[string]any)
+		for k, v := range ctx.State().All() {
+			if !strings.HasPrefix(k, "_adk") {
+				stateMap[k] = v
+			}
+		}
+
+		subSession, err := sessionService.Create(ctx, &session.CreateRequest{
+			AppName: "ResearchAssistant",
+			UserID:  ctx.UserID(),
+			State:   stateMap,
+		})
+		if err != nil {
+			return nil, fmt.Errorf("failed to create sub-session: %w", err)
+		}
+
+		// 2. Create a one-off runner for this call
+		r, err := runner.New(runner.Config{
+			AppName:        "ResearchAssistant",
+			Agent:          researchAssistant,
+			SessionService: sessionService,
+		})
+		if err != nil {
+			return nil, fmt.Errorf("failed to create sub-runner: %w", err)
+		}
+
+		// 3. Execute and accumulate text output
+		var fullOutput strings.Builder
+		events := r.Run(ctx, ctx.UserID(), subSession.Session.ID(), &genai.Content{
+			Role:  "user",
+			Parts: []*genai.Part{{Text: args.Request}},
+		}, agent.RunConfig{
+			StreamingMode: agent.StreamingModeSSE,
+		})
+
+		for event, err := range events {
+			if err != nil {
+				return nil, err
+			}
+			if event.LLMResponse.Content != nil {
+				for _, part := range event.LLMResponse.Content.Parts {
+					if part.Text != "" {
+						fullOutput.WriteString(part.Text)
+					}
+				}
+			}
+		}
+
+		result := fullOutput.String()
+		if result == "" {
+			return nil, fmt.Errorf("research assistant returned no output")
+		}
+
+		return map[string]any{"result": result}, nil
+	})
+
+	// Final toolset for the Root Agent
+	allRootTools := append(coreTools, rootMCPTools...)
+	allRootTools = append(allRootTools, researchTool)
+
+	// 5. Create Root ADK LLMAgent
 	adkAgent, err := llmagent.New(llmagent.Config{
 		Name:        "ravenbot",
 		Model:       adkLLM,
-		Description: "RavenBot autonomous research agent",
+		Description: "RavenBot autonomous conversation agent",
 		InstructionProvider: func(ctx agent.ReadonlyContext) (string, error) {
 			a.summariesMu.RLock()
 			summary := a.summaries[ctx.SessionID()]
@@ -105,7 +204,7 @@ func NewAgent(ctx context.Context, cfg *config.Config, database *db.DB) (*Agent,
 			}
 			return a.cfg.Bot.SystemPrompt, nil
 		},
-		Tools: allTools,
+		Tools: allRootTools,
 		AfterModelCallbacks: []llmagent.AfterModelCallback{
 			func(ctx agent.CallbackContext, llmResponse *model.LLMResponse, llmResponseError error) (*model.LLMResponse, error) {
 				if llmResponseError != nil || llmResponse == nil || llmResponse.UsageMetadata == nil {
@@ -126,12 +225,11 @@ func NewAgent(ctx context.Context, cfg *config.Config, database *db.DB) (*Agent,
 		},
 	})
 	if err != nil {
-		return nil, fmt.Errorf("failed to create ADK agent: %w", err)
+		return nil, fmt.Errorf("failed to create root ADK agent: %w", err)
 	}
 	a.adkAgent = adkAgent
 
-	// 5. Create ADK Runner
-	sessionService := session.InMemoryService()
+	// 7. Create ADK Runner
 	adkRunner, err := runner.New(runner.Config{
 		AppName:        AppName,
 		Agent:          adkAgent,
@@ -203,10 +301,11 @@ func (a *Agent) Chat(ctx context.Context, sessionID, message string) (string, er
 	}
 
 	events := a.adkRunner.Run(ctx, userID, sessionID, &genai.Content{
+		Role:  "user",
 		Parts: []*genai.Part{{Text: message}},
 	}, agent.RunConfig{})
 
-	return a.consumeRunnerEvents(events)
+	return a.consumeRunnerEvents(sessionID, events)
 }
 
 // RunMission executes a one-shot research mission (no session persistence)
@@ -218,7 +317,7 @@ func (a *Agent) RunMission(ctx context.Context, prompt string) (string, error) {
 		Model:       a.adkLLM,
 		Description: "RavenBot research mission agent",
 		Instruction: a.cfg.Bot.ResearchSystemPrompt,
-		Tools:       a.GetRavenTools(),
+		Tools:       a.GetTechnicalTools(),
 	})
 	if err != nil {
 		return "", err
@@ -235,17 +334,27 @@ func (a *Agent) RunMission(ctx context.Context, prompt string) (string, error) {
 	}
 
 	events := missionRunner.Run(ctx, "mission-user", missionID, &genai.Content{
+		Role:  "user",
 		Parts: []*genai.Part{{Text: prompt}},
 	}, agent.RunConfig{})
 
-	return a.consumeRunnerEvents(events)
+	return a.consumeRunnerEvents(missionID, events)
 }
 
 // consumeRunnerEvents processes the event stream from the ADK runner
-func (a *Agent) consumeRunnerEvents(events iter.Seq2[*session.Event, error]) (string, error) {
+func (a *Agent) consumeRunnerEvents(sessionID string, events iter.Seq2[*session.Event, error]) (string, error) {
 	var lastText strings.Builder
 	for event, err := range events {
 		if err != nil {
+			slog.Error("ADK runner yielded error", "error", err)
+			msg := err.Error()
+			// Improved error handling for common ADK/Gemini turn order issues.
+			if strings.Contains(msg, "Error 400") && strings.Contains(msg, "function call turn") {
+				slog.Warn("Turn order corruption detected, performing emergency session reset", "sessionID", sessionID)
+				a.ClearSession(sessionID)
+				// We return a user-friendly error suggesting a retry
+				return "", fmt.Errorf("I encountered a technical glitch in our conversation turn order. I've reset the session to fix it—please try your last request again!")
+			}
 			return "", fmt.Errorf("ADK runner error: %w", err)
 		}
 		if event.LLMResponse.Content != nil {
