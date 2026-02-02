@@ -54,7 +54,7 @@ COPY --from=builder /app/config.json* ./
 RUN mkdir -p daily_logs
 
 # Use a non-root user (optional but recommended)
-# RUN adduser -D ravenuser
-# USER ravenuser
+RUN adduser -D ravenuser
+USER ravenuser
 
 CMD ["/app/ravenbot"]

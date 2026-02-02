@@ -3,52 +3,63 @@ package agent
 import (
 	"context"
 	"fmt"
+	"iter"
 	"log/slog"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/raythurman2386/ravenbot/internal/config"
 	"github.com/raythurman2386/ravenbot/internal/db"
 	"github.com/raythurman2386/ravenbot/internal/mcp"
 
+	"google.golang.org/adk/agent"
+	"google.golang.org/adk/agent/llmagent"
+	"google.golang.org/adk/model"
+	"google.golang.org/adk/model/gemini"
+	"google.golang.org/adk/runner"
+	"google.golang.org/adk/session"
 	"google.golang.org/genai"
 )
 
+const AppName = "ravenbot"
+
 type Agent struct {
-	client     *genai.Client
 	cfg        *config.Config
 	db         *db.DB
-	sessions   map[string]*genai.Chat // Chat sessions by user/channel ID
-	summaries  map[string]string      // Compressed context summaries by session ID
-	mu         sync.RWMutex
 	mcpClients map[string]*mcp.Client
-	tools      []*genai.Tool
+	mu         sync.RWMutex
+
+	// Summaries for context compression
+	summaries   map[string]string
+	summariesMu sync.RWMutex
+
+	// ADK components
+	adkLLM         model.LLM
+	adkAgent       agent.Agent
+	adkRunner      *runner.Runner
+	sessionService session.Service
 }
 
 func NewAgent(ctx context.Context, cfg *config.Config, database *db.DB) (*Agent, error) {
-	client, err := genai.NewClient(ctx, &genai.ClientConfig{
+	// 1. Initialize ADK Model (LLM)
+	adkLLM, err := gemini.NewModel(ctx, cfg.Bot.Model, &genai.ClientConfig{
 		APIKey:  cfg.GeminiAPIKey,
 		Backend: genai.BackendGeminiAPI,
 	})
 	if err != nil {
-		return nil, fmt.Errorf("failed to create GenAI client: %w", err)
+		return nil, fmt.Errorf("failed to create ADK Gemini model: %w", err)
 	}
 
-	agent := &Agent{
-		client:     client,
+	a := &Agent{
 		cfg:        cfg,
 		db:         database,
-		sessions:   make(map[string]*genai.Chat),
-		summaries:  make(map[string]string),
 		mcpClients: make(map[string]*mcp.Client),
-		// Start with native tools
-		tools: append([]*genai.Tool{}, RavenTools...),
+		summaries:  make(map[string]string),
+		adkLLM:     adkLLM,
 	}
 
-	// Add generic MCP resource tool
-	agent.registerTool(GetReadResourceTool())
-
-	// Initialize MCP Servers
+	// 2. Initialize MCP Servers
 	for name, serverCfg := range cfg.MCPServers {
 		slog.Info("Initializing MCP Server", "name", name, "command", serverCfg.Command)
 		var mcpClient *mcp.Client
@@ -69,263 +80,169 @@ func NewAgent(ctx context.Context, cfg *config.Config, database *db.DB) (*Agent,
 			continue
 		}
 
-		// Register Tools
-		tools, err := mcpClient.ListTools()
-		if err != nil {
-			slog.Error("Failed to list tools from MCP server", "name", name, "error", err)
-		} else {
-			for _, tool := range tools {
-				genTool, err := mcpToolToGenAI(name, tool)
-				if err != nil {
-					slog.Error("Failed to convert MCP tool", "name", tool.Name, "server", name, "error", err)
-					continue
+		a.mu.Lock()
+		a.mcpClients[name] = mcpClient
+		a.mu.Unlock()
+	}
+
+	// 3. Gather Tools
+	nativeTools := a.GetRavenTools()
+	mcpTools := a.GetMCPTools(ctx)
+	allTools := append(nativeTools, mcpTools...)
+
+	// 4. Create ADK LLMAgent
+	adkAgent, err := llmagent.New(llmagent.Config{
+		Name:        "ravenbot",
+		Model:       adkLLM,
+		Description: "RavenBot autonomous research agent",
+		InstructionProvider: func(ctx agent.ReadonlyContext) (string, error) {
+			a.summariesMu.RLock()
+			summary := a.summaries[ctx.SessionID()]
+			a.summariesMu.RUnlock()
+
+			if summary != "" {
+				return fmt.Sprintf("%s\n\n### CONTEXT SUMMARY OF PREVIOUS CONVERSATION:\n%s", a.cfg.Bot.SystemPrompt, summary), nil
+			}
+			return a.cfg.Bot.SystemPrompt, nil
+		},
+		Tools: allTools,
+		AfterModelCallbacks: []llmagent.AfterModelCallback{
+			func(ctx agent.CallbackContext, llmResponse *model.LLMResponse, llmResponseError error) (*model.LLMResponse, error) {
+				if llmResponseError != nil || llmResponse == nil || llmResponse.UsageMetadata == nil {
+					return llmResponse, llmResponseError
 				}
-				agent.registerTool(genTool)
-				slog.Info("Registered MCP Tool", "name", genTool.Name, "server", name)
-			}
-		}
 
-		// Register Resources as virtual tools
-		resources, err := mcpClient.ListResources()
-		if err != nil {
-			slog.Debug("MCP server does not support resources", "name", name)
-		} else {
-			for _, res := range resources {
-				genTool := mcpResourceToGenAI(name, res)
-				agent.registerTool(genTool)
-				slog.Info("Registered MCP Resource as Tool", "uri", res.URI, "server", name)
-			}
-		}
+				// Check if context needs compression
+				totalTokens := llmResponse.UsageMetadata.TotalTokenCount
+				threshold := float64(a.cfg.Bot.TokenLimit) * a.cfg.Bot.TokenThreshold
 
-		agent.mcpClients[name] = mcpClient
-	}
+				if float64(totalTokens) >= threshold {
+					slog.Info("Context window threshold reached, triggering compression", "sessionID", ctx.SessionID(), "tokens", totalTokens)
+					go a.compressContext(ctx.SessionID())
+				}
 
-	return agent, nil
-}
-
-func (a *Agent) registerTool(genTool *genai.FunctionDeclaration) {
-	if len(a.tools) > 0 && a.tools[0].FunctionDeclarations != nil {
-		a.tools[0].FunctionDeclarations = append(a.tools[0].FunctionDeclarations, genTool)
-	} else {
-		a.tools = append(a.tools, &genai.Tool{
-			FunctionDeclarations: []*genai.FunctionDeclaration{genTool},
-		})
-	}
-}
-
-// getOrCreateSession retrieves an existing chat session or creates a new one
-func (a *Agent) getOrCreateSession(ctx context.Context, sessionID string) (*genai.Chat, error) {
-	a.mu.RLock()
-	chat, exists := a.sessions[sessionID]
-	a.mu.RUnlock()
-
-	if exists {
-		return chat, nil
-	}
-
-	// Create new session
-	a.mu.Lock()
-	defer a.mu.Unlock()
-
-	// Double-check after acquiring write lock
-	if chat, exists = a.sessions[sessionID]; exists {
-		return chat, nil
-	}
-
-	// Check if we have a compressed summary for this session
-	// Note: We already hold the write lock, so we can access summaries directly
-	summary := a.summaries[sessionID]
-
-	effectivePrompt := a.cfg.Bot.SystemPrompt
-	if summary != "" {
-		effectivePrompt = fmt.Sprintf("%s\n\n### CONTEXT SUMMARY OF PREVIOUS CONVERSATION:\n%s", a.cfg.Bot.SystemPrompt, summary)
-	}
-
-	chat, err := a.client.Chats.Create(ctx, a.cfg.Bot.Model, &genai.GenerateContentConfig{
-		Tools: a.tools,
-		SystemInstruction: &genai.Content{
-			Parts: []*genai.Part{
-				{Text: effectivePrompt},
+				return llmResponse, nil
 			},
 		},
-	}, nil)
+	})
 	if err != nil {
-		return nil, fmt.Errorf("failed to create chat session: %w", err)
+		return nil, fmt.Errorf("failed to create ADK agent: %w", err)
+	}
+	a.adkAgent = adkAgent
+
+	// 5. Create ADK Runner
+	sessionService := session.InMemoryService()
+	adkRunner, err := runner.New(runner.Config{
+		AppName:        AppName,
+		Agent:          adkAgent,
+		SessionService: sessionService,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("failed to create ADK runner: %w", err)
+	}
+	a.adkRunner = adkRunner
+	a.sessionService = sessionService
+
+	return a, nil
+}
+
+// compressContext generates a summary of the session and clears it to free up the context window.
+func (a *Agent) compressContext(sessionID string) {
+	ctx := context.Background()
+	slog.Info("Generating conversation summary for compression", "sessionID", sessionID)
+
+	summary, err := a.RunMission(ctx, a.cfg.Bot.SummaryPrompt)
+	if err != nil {
+		slog.Error("Failed to generate summary for context compression", "sessionID", sessionID, "error", err)
+		return
 	}
 
-	a.sessions[sessionID] = chat
-	return chat, nil
+	a.summariesMu.Lock()
+	a.summaries[sessionID] = summary
+	a.summariesMu.Unlock()
+
+	// Clear the session so the next turn starts with a fresh context (using the summary in instructions)
+	a.ClearSession(sessionID)
+	slog.Info("Context compressed successfully", "sessionID", sessionID)
 }
 
 // ClearSession removes a chat session (useful for /reset command)
 func (a *Agent) ClearSession(sessionID string) {
-	a.mu.Lock()
-	delete(a.sessions, sessionID)
-	a.mu.Unlock()
+	userID := "default-user"
+	if err := a.sessionService.Delete(context.Background(), &session.DeleteRequest{
+		AppName:   AppName,
+		UserID:    userID,
+		SessionID: sessionID,
+	}); err != nil {
+		slog.Error("Failed to delete session", "sessionID", sessionID, "error", err)
+	}
 }
 
 // Chat handles conversational messages with session persistence
 func (a *Agent) Chat(ctx context.Context, sessionID, message string) (string, error) {
 	slog.Info("Agent.Chat called", "sessionID", sessionID, "messageLength", len(message))
-	chat, err := a.getOrCreateSession(ctx, sessionID)
-	if err != nil {
-		slog.Error("Failed to get/create session", "sessionID", sessionID, "error", err)
-		return "", err
-	}
 
-	slog.Info("Sending message to Gemini", "sessionID", sessionID)
-	resp, err := chat.SendMessage(ctx, genai.Part{Text: message})
-	if err != nil {
-		// Session might be stale, try recreating
-		a.ClearSession(sessionID)
-		slog.Error("Failed to send message to Gemini", "sessionID", sessionID, "error", err)
-		return "", fmt.Errorf("failed to send message: %w", err)
-	}
+	userID := "default-user"
 
-	slog.Info("Processing Gemini response", "sessionID", sessionID)
-	response, err := a.processResponse(ctx, chat, resp)
-	if err != nil {
-		slog.Error("Failed to process Gemini response", "sessionID", sessionID, "error", err)
-		return "", err
-	}
+	events := a.adkRunner.Run(ctx, userID, sessionID, &genai.Content{
+		Parts: []*genai.Part{{Text: message}},
+	}, agent.RunConfig{})
 
-	slog.Info("Agent.Chat completed", "sessionID", sessionID, "responseLength", len(response))
-
-	// Proactively check if context needs compression (async)
-	go func() {
-		if err := a.checkAndCompressContext(context.Background(), sessionID, chat); err != nil {
-			slog.Error("Context compression check failed", "sessionID", sessionID, "error", err)
-		}
-	}()
-
-	return response, nil
+	return a.consumeRunnerEvents(events)
 }
 
 // RunMission executes a one-shot research mission (no session persistence)
 func (a *Agent) RunMission(ctx context.Context, prompt string) (string, error) {
-	chat, err := a.client.Chats.Create(ctx, a.cfg.Bot.Model, &genai.GenerateContentConfig{
-		Tools: a.tools,
-		SystemInstruction: &genai.Content{
-			Parts: []*genai.Part{
-				{Text: a.cfg.Bot.ResearchSystemPrompt},
-			},
-		},
-	}, nil)
+	missionID := fmt.Sprintf("mission-%d", time.Now().UnixNano())
+
+	missionAgent, err := llmagent.New(llmagent.Config{
+		Name:        "ravenbot-mission",
+		Model:       a.adkLLM,
+		Description: "RavenBot research mission agent",
+		Instruction: a.cfg.Bot.ResearchSystemPrompt,
+		Tools:       a.GetRavenTools(),
+	})
 	if err != nil {
-		return "", fmt.Errorf("failed to create chat session: %w", err)
+		return "", err
 	}
 
-	resp, err := chat.SendMessage(ctx, genai.Part{Text: prompt})
+	// Create a temporary runner for the mission
+	missionRunner, err := runner.New(runner.Config{
+		AppName:        AppName,
+		Agent:          missionAgent,
+		SessionService: a.sessionService,
+	})
 	if err != nil {
-		return "", fmt.Errorf("failed to send initial message: %w", err)
+		return "", err
 	}
 
-	return a.processResponse(ctx, chat, resp)
+	events := missionRunner.Run(ctx, "mission-user", missionID, &genai.Content{
+		Parts: []*genai.Part{{Text: prompt}},
+	}, agent.RunConfig{})
+
+	return a.consumeRunnerEvents(events)
 }
 
-// processResponse handles tool calls and extracts final text
-func (a *Agent) processResponse(ctx context.Context, chat *genai.Chat, resp *genai.GenerateContentResponse) (string, error) {
-	var fullResponse strings.Builder
-	iteration := 0
-	for {
-		iteration++
-		slog.Debug("processResponse iteration", "iteration", iteration)
-		if len(resp.Candidates) == 0 || len(resp.Candidates[0].Content.Parts) == 0 {
-			slog.Debug("processResponse: no candidates or parts, breaking")
-			break
-		}
-
-		var toolResponses []genai.Part
-		hasCalls := false
-
-		for _, part := range resp.Candidates[0].Content.Parts {
-			if part.Text != "" {
-				if fullResponse.Len() > 0 {
-					fullResponse.WriteString("\n")
-				}
-				fullResponse.WriteString(part.Text)
-			}
-
-			if part.FunctionCall != nil {
-				hasCalls = true
-				slog.Info("Executing tool call", "tool", part.FunctionCall.Name, "iteration", iteration)
-				result, err := a.handleToolCall(ctx, part.FunctionCall)
-				if err != nil {
-					slog.Error("Tool execution failed", "tool", part.FunctionCall.Name, "error", err)
-					result = map[string]string{"error": err.Error()}
-				}
-
-				toolResponses = append(toolResponses, genai.Part{
-					FunctionResponse: &genai.FunctionResponse{
-						Name:     part.FunctionCall.Name,
-						Response: map[string]any{"result": result},
-					},
-				})
-			}
-		}
-
-		if !hasCalls {
-			break
-		}
-
-		var err error
-		resp, err = chat.SendMessage(ctx, toolResponses...)
+// consumeRunnerEvents processes the event stream from the ADK runner
+func (a *Agent) consumeRunnerEvents(events iter.Seq2[*session.Event, error]) (string, error) {
+	var lastText strings.Builder
+	for event, err := range events {
 		if err != nil {
-			return "", fmt.Errorf("failed to send tool responses: %w", err)
+			return "", fmt.Errorf("ADK runner error: %w", err)
 		}
-	}
-
-	finalText := strings.TrimSpace(fullResponse.String())
-	if finalText == "" {
-		return "", fmt.Errorf("no response from Gemini")
-	}
-
-	return finalText, nil
-}
-
-// checkAndCompressContext counts tokens and triggers summarization if threshold is hit
-func (a *Agent) checkAndCompressContext(ctx context.Context, sessionID string, chat *genai.Chat) error {
-	// Count tokens in the current history
-	resp, err := a.client.Models.CountTokens(ctx, a.cfg.Bot.Model, chat.History(false), nil)
-	if err != nil {
-		return fmt.Errorf("failed to count tokens: %w", err)
-	}
-
-	if float64(resp.TotalTokens) < float64(a.cfg.Bot.TokenLimit)*a.cfg.Bot.TokenThreshold {
-		return nil
-	}
-
-	slog.Info("Context window threshold reached, compressing...", "sessionID", sessionID, "tokens", resp.TotalTokens)
-
-	// 1. Generate a concise summary of the conversation
-	summaryPrompt := a.cfg.Bot.SummaryPrompt
-
-	summaryResp, err := chat.SendMessage(ctx, genai.Part{Text: summaryPrompt})
-	if err != nil {
-		return fmt.Errorf("failed to generate summary: %w", err)
-	}
-
-	var summaryText strings.Builder
-	if len(summaryResp.Candidates) > 0 && summaryResp.Candidates[0].Content != nil {
-		for _, p := range summaryResp.Candidates[0].Content.Parts {
-			if p.Text != "" {
-				summaryText.WriteString(p.Text)
+		if event.LLMResponse.Content != nil {
+			for _, part := range event.LLMResponse.Content.Parts {
+				if part.Text != "" {
+					lastText.WriteString(part.Text)
+				}
 			}
 		}
 	}
 
-	if summaryText.Len() == 0 {
-		return fmt.Errorf("empty summary generated")
+	response := strings.TrimSpace(lastText.String())
+	if response == "" {
+		return "", fmt.Errorf("no response from ADK agent")
 	}
 
-	// 2. Store the summary and flag the session for recreation
-	// By deleting the session from the map, getOrCreateSession will
-	// rebuild it using the new summary in the system instructions.
-	a.mu.Lock()
-	a.summaries[sessionID] = summaryText.String()
-	delete(a.sessions, sessionID)
-	a.mu.Unlock()
-
-	slog.Info("Context compressed successfully", "sessionID", sessionID, "summaryLength", summaryText.Len())
-	return nil
+	return response, nil
 }
