@@ -184,6 +184,24 @@ func (a *Agent) Chat(ctx context.Context, sessionID, message string) (string, er
 
 	userID := "default-user"
 
+	// Ensure session exists
+	_, err := a.sessionService.Get(ctx, &session.GetRequest{
+		AppName:   AppName,
+		UserID:    userID,
+		SessionID: sessionID,
+	})
+	if err != nil {
+		slog.Info("Session not found, creating new one", "sessionID", sessionID)
+		_, err = a.sessionService.Create(ctx, &session.CreateRequest{
+			AppName:   AppName,
+			UserID:    userID,
+			SessionID: sessionID,
+		})
+		if err != nil {
+			return "", fmt.Errorf("failed to create session: %w", err)
+		}
+	}
+
 	events := a.adkRunner.Run(ctx, userID, sessionID, &genai.Content{
 		Parts: []*genai.Part{{Text: message}},
 	}, agent.RunConfig{})
