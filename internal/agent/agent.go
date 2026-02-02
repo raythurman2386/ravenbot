@@ -184,6 +184,9 @@ func NewAgent(ctx context.Context, cfg *config.Config, database *db.DB) (*Agent,
 
 		return map[string]any{"result": result}, nil
 	})
+	if err != nil {
+		return nil, fmt.Errorf("failed to create research tool: %w", err)
+	}
 
 	// Final toolset for the Root Agent
 	allRootTools := append(coreTools, rootMCPTools...)
@@ -353,7 +356,7 @@ func (a *Agent) consumeRunnerEvents(sessionID string, events iter.Seq2[*session.
 				slog.Warn("Turn order corruption detected, performing emergency session reset", "sessionID", sessionID)
 				a.ClearSession(sessionID)
 				// We return a user-friendly error suggesting a retry
-				return "", fmt.Errorf("I encountered a technical glitch in our conversation turn order. I've reset the session to fix it—please try your last request again!")
+				return "", fmt.Errorf("encountered a technical glitch in conversation turn order; session reset, please try again")
 			}
 			return "", fmt.Errorf("ADK runner error: %w", err)
 		}

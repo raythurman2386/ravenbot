@@ -13,7 +13,7 @@ services:
       - TZ=America/Chicago
     stdin_open: true
     tty: true
-    working_dir: /src
+    working_dir: /app
     volumes:
       - .:/src
       - ./daily_logs:/app/daily_logs

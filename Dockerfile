@@ -56,13 +56,12 @@ WORKDIR /app
 COPY --from=builder /app/ravenbot .
 COPY --from=builder /app/config.json* ./
 
-# Create directory for logs
-RUN mkdir -p daily_logs
-
-# Setup docker permissions and user
-RUN addgroup -g 1001 docker && \
-    adduser -D ravenuser && \
-    addgroup ravenuser docker
+# Create directories and setup user with correct permissions
+RUN mkdir -p daily_logs data && \
+    addgroup -g 1001 docker && \
+    adduser -D -u 1000 ravenuser && \
+    addgroup ravenuser docker && \
+    chown -R ravenuser:ravenuser /app
 
 USER ravenuser
 
