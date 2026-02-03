@@ -402,6 +402,28 @@ func (a *Agent) Chat(ctx context.Context, sessionID, message string) (string, er
 // Missions always default to the Pro model for deep research.
 func (a *Agent) RunMission(ctx context.Context, prompt string) (string, error) {
 	missionID := fmt.Sprintf("mission-%d", time.Now().UnixNano())
+	userID := "mission-user"
+
+	// Create session for the mission
+	_, err := a.sessionService.Create(ctx, &session.CreateRequest{
+		AppName:   AppName,
+		UserID:    userID,
+		SessionID: missionID,
+	})
+	if err != nil {
+		return "", fmt.Errorf("failed to create mission session: %w", err)
+	}
+
+	// Ensure cleanup after mission
+	defer func() {
+		if err := a.sessionService.Delete(context.Background(), &session.DeleteRequest{
+			AppName:   AppName,
+			UserID:    userID,
+			SessionID: missionID,
+		}); err != nil {
+			slog.Warn("Failed to cleanup mission session", "sessionID", missionID, "error", err)
+		}
+	}()
 
 	missionAgent, err := llmagent.New(llmagent.Config{
 		Name:        "ravenbot-mission",
