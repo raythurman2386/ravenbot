@@ -43,7 +43,7 @@ func DuckDuckGoSearch(ctx context.Context, query string, maxResults int) ([]Sear
 	if err != nil {
 		return nil, fmt.Errorf("failed to fetch search results: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("bad status code: %d", resp.StatusCode)

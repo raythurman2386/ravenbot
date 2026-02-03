@@ -138,7 +138,7 @@ func (t *SSETransport) Start() error {
 	}
 
 	if resp.StatusCode != http.StatusOK {
-		resp.Body.Close()
+		_ = resp.Body.Close()
 		return fmt.Errorf("unexpected status code: %d", resp.StatusCode)
 	}
 
@@ -167,7 +167,7 @@ func (t *SSETransport) WriteRequest(req []byte) error {
 	if err != nil {
 		return err
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusAccepted && resp.StatusCode != http.StatusOK {
 		return fmt.Errorf("failed to send message: %d", resp.StatusCode)
@@ -187,7 +187,7 @@ func (t *SSETransport) ReadLoop(handler func(line []byte)) {
 		slog.Error("SSE ReadLoop failed to connect", "error", err)
 		return
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	scanner := bufio.NewScanner(resp.Body)
 	for scanner.Scan() {

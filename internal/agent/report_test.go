@@ -12,7 +12,7 @@ func TestSaveReport(t *testing.T) {
 	content := "# Daily Report\nTest content"
 
 	// Use a cleanup to remove the test logs directory
-	defer os.RemoveAll("daily_logs")
+	defer func() { _ = os.RemoveAll("daily_logs") }()
 
 	path, err := SaveReport("daily_logs", content)
 	assert.NoError(t, err)

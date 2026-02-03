@@ -15,7 +15,7 @@ func BenchmarkDeduplication(b *testing.B) {
 	if err != nil {
 		b.Fatal(err)
 	}
-	defer database.Close()
+	defer func() { _ = database.Close() }()
 
 	a := &Agent{db: database}
 

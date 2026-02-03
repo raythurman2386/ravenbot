@@ -17,7 +17,7 @@ func setupTestDB(t *testing.T) *DB {
 func TestHasHeadline(t *testing.T) {
 	t.Parallel()
 	db := setupTestDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 	ctx := context.Background()
 
 	url := "https://example.com/test"
@@ -49,7 +49,7 @@ func TestHasHeadline(t *testing.T) {
 func TestAddHeadline(t *testing.T) {
 	t.Parallel()
 	db := setupTestDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 	ctx := context.Background()
 
 	tests := []struct {
@@ -76,7 +76,7 @@ func TestAddHeadline(t *testing.T) {
 func TestGetExistingHeadlines(t *testing.T) {
 	t.Parallel()
 	db := setupTestDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 	ctx := context.Background()
 
 	_ = db.AddHeadline(ctx, "T1", "https://example.com/1")
@@ -123,7 +123,7 @@ func TestGetExistingHeadlines(t *testing.T) {
 func TestAddHeadlines_Batch(t *testing.T) {
 	t.Parallel()
 	db := setupTestDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 	ctx := context.Background()
 
 	headlines := []Headline{
@@ -147,7 +147,7 @@ func TestAddHeadlines_Batch(t *testing.T) {
 func TestSaveBriefing(t *testing.T) {
 	t.Parallel()
 	db := setupTestDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 	ctx := context.Background()
 
 	err := db.SaveBriefing(ctx, "Briefing content")

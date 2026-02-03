@@ -68,7 +68,7 @@ func TestDeduplicationToolLogic(t *testing.T) {
 	ctx := context.Background()
 	database, err := db.InitDB(":memory:")
 	require.NoError(t, err)
-	defer database.Close()
+	defer func() { _ = database.Close() }()
 
 	a := &Agent{db: database}
 

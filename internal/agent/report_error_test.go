@@ -13,7 +13,7 @@ func TestSaveReport_Errors(t *testing.T) {
 		tempFile := "daily_logs_mkdir_fail"
 		err := os.WriteFile(tempFile, []byte("file"), 0644)
 		assert.NoError(t, err)
-		defer os.Remove(tempFile)
+		defer func() { _ = os.Remove(tempFile) }()
 
 		_, err = SaveReport(tempFile+"/subdir", "content")
 		assert.Error(t, err)
@@ -25,7 +25,7 @@ func TestSaveReport_Errors(t *testing.T) {
 		dir := "daily_logs_readonly"
 		err := os.MkdirAll(dir, 0555) // Read-only
 		assert.NoError(t, err)
-		defer os.RemoveAll(dir)
+		defer func() { _ = os.RemoveAll(dir) }()
 
 		_, err = SaveReport(dir, "content")
 		assert.Error(t, err)

@@ -24,10 +24,10 @@ func TestValidateURL(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			if tt.allowLocal {
-				os.Setenv("ALLOW_LOCAL_URLS", "true")
-				defer os.Unsetenv("ALLOW_LOCAL_URLS")
+				_ = os.Setenv("ALLOW_LOCAL_URLS", "true")
+				defer func() { _ = os.Unsetenv("ALLOW_LOCAL_URLS") }()
 			} else {
-				os.Unsetenv("ALLOW_LOCAL_URLS")
+				_ = os.Unsetenv("ALLOW_LOCAL_URLS")
 			}
 
 			err := ValidateURL(context.Background(), tt.url)

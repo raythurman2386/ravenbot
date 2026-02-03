@@ -10,19 +10,19 @@ import (
 
 func BenchmarkConcurrentReadWrite(b *testing.B) {
 	dbPath := "test_bench.db"
-	os.Remove(dbPath)
-	os.Remove(dbPath + "-wal")
-	os.Remove(dbPath + "-shm")
+	_ = os.Remove(dbPath)
+	_ = os.Remove(dbPath + "-wal")
+	_ = os.Remove(dbPath + "-shm")
 
 	db, err := InitDB(dbPath)
 	if err != nil {
 		b.Fatalf("failed to init db: %v", err)
 	}
 	defer func() {
-		db.Close()
-		os.Remove(dbPath)
-		os.Remove(dbPath + "-wal")
-		os.Remove(dbPath + "-shm")
+		_ = db.Close()
+		_ = os.Remove(dbPath)
+		_ = os.Remove(dbPath + "-wal")
+		_ = os.Remove(dbPath + "-shm")
 	}()
 
 	var writeErrors int64
@@ -58,7 +58,7 @@ func BenchmarkConcurrentReadWrite(b *testing.B) {
 						var url, title string
 						_ = rows.Scan(&id, &url, &title)
 					}
-					rows.Close()
+					_ = rows.Close()
 				}
 			}
 			i++

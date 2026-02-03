@@ -103,5 +103,7 @@ func (d *DiscordNotifier) StartListener(ctx context.Context, handler func(channe
 	}
 
 	<-ctx.Done()
-	d.session.Close()
+	if err := d.session.Close(); err != nil {
+		slog.Error("Failed to close discord session", "error", err)
+	}
 }

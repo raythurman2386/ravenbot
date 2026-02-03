@@ -99,7 +99,7 @@ func TestStdioClient(t *testing.T) {
 	if err := client.Start(); err != nil {
 		t.Fatalf("Failed to start client: %v", err)
 	}
-	defer client.Close()
+	defer func() { _ = client.Close() }()
 
 	// 1. Test Initialize
 	if err := client.Initialize(); err != nil {
@@ -145,7 +145,7 @@ func TestClientNotification(t *testing.T) {
 	if err := client.Start(); err != nil {
 		t.Fatalf("Failed to start client: %v", err)
 	}
-	defer client.Close()
+	defer func() { _ = client.Close() }()
 
 	if err := client.Initialize(); err != nil {
 		t.Fatalf("Initialize failed: %v", err)

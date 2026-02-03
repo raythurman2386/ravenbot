@@ -52,7 +52,7 @@ func (db *DB) GetExistingHeadlines(ctx context.Context, urls []string) (map[stri
 	if err != nil {
 		return nil, fmt.Errorf("failed to get existing headlines: %w", err)
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	existing := make(map[string]bool)
 	for rows.Next() {
@@ -86,7 +86,7 @@ func (db *DB) AddHeadlines(ctx context.Context, headlines []Headline) error {
 	if err != nil {
 		return fmt.Errorf("failed to prepare statement: %w", err)
 	}
-	defer stmt.Close()
+	defer func() { _ = stmt.Close() }()
 
 	for _, h := range headlines {
 		if _, err := stmt.ExecContext(ctx, h.Title, h.URL); err != nil {

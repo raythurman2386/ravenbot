@@ -152,7 +152,9 @@ func NewAgent(ctx context.Context, cfg *config.Config, database *raven.DB) (*Age
 
 			if err := mcpClient.Initialize(); err != nil {
 				slog.Error("Failed to initialize MCP server", "name", name, "error", err)
-				mcpClient.Close()
+				if err := mcpClient.Close(); err != nil {
+					slog.Error("Failed to close MCP client", "name", name, "error", err)
+				}
 				return
 			}
 
@@ -262,8 +264,8 @@ func NewAgent(ctx context.Context, cfg *config.Config, database *raven.DB) (*Age
 			if err != nil {
 				return nil, err
 			}
-			if event.LLMResponse.Content != nil {
-				for _, part := range event.LLMResponse.Content.Parts {
+			if event.Content != nil {
+				for _, part := range event.Content.Parts {
 					if part.Text != "" {
 						fullOutput.WriteString(part.Text)
 					}
@@ -633,8 +635,8 @@ func (a *Agent) consumeRunnerEvents(sessionID string, events iter.Seq2[*session.
 			}
 			return "", fmt.Errorf("ADK runner error: %w", err)
 		}
-		if event.LLMResponse.Content != nil {
-			for _, part := range event.LLMResponse.Content.Parts {
+		if event.Content != nil {
+			for _, part := range event.Content.Parts {
 				if part.Text != "" {
 					lastText.WriteString(part.Text)
 				}

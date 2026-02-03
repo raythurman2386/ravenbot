@@ -9,8 +9,8 @@ import (
 
 func TestLoadConfig(t *testing.T) {
 	t.Run("success", func(t *testing.T) {
-		os.Setenv("GEMINI_API_KEY", "test-key")
-		defer os.Unsetenv("GEMINI_API_KEY")
+		_ = os.Setenv("GEMINI_API_KEY", "test-key")
+		defer func() { _ = os.Unsetenv("GEMINI_API_KEY") }()
 
 		cfg, err := LoadConfig()
 		assert.NoError(t, err)
@@ -19,8 +19,8 @@ func TestLoadConfig(t *testing.T) {
 	})
 
 	t.Run("success multiple keys", func(t *testing.T) {
-		os.Setenv("GEMINI_API_KEY", "key1,key2, key3")
-		defer os.Unsetenv("GEMINI_API_KEY")
+		_ = os.Setenv("GEMINI_API_KEY", "key1,key2, key3")
+		defer func() { _ = os.Unsetenv("GEMINI_API_KEY") }()
 
 		cfg, err := LoadConfig()
 		assert.NoError(t, err)
@@ -31,7 +31,7 @@ func TestLoadConfig(t *testing.T) {
 	})
 
 	t.Run("missing key", func(t *testing.T) {
-		os.Unsetenv("GEMINI_API_KEY")
+		_ = os.Unsetenv("GEMINI_API_KEY")
 
 		cfg, err := LoadConfig()
 		assert.Error(t, err)
@@ -40,8 +40,8 @@ func TestLoadConfig(t *testing.T) {
 	})
 
 	t.Run("empty key", func(t *testing.T) {
-		os.Setenv("GEMINI_API_KEY", "  , ,  ")
-		defer os.Unsetenv("GEMINI_API_KEY")
+		_ = os.Setenv("GEMINI_API_KEY", "  , ,  ")
+		defer func() { _ = os.Unsetenv("GEMINI_API_KEY") }()
 
 		cfg, err := LoadConfig()
 		assert.Error(t, err)
