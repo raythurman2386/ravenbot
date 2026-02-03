@@ -15,7 +15,12 @@ type RSSItem struct {
 }
 
 func FetchRSS(ctx context.Context, url string) ([]RSSItem, error) {
+	if err := ValidateURL(ctx, url); err != nil {
+		return nil, err
+	}
+
 	fp := gofeed.NewParser()
+	fp.Client = NewSafeClient()
 	feed, err := fp.ParseURLWithContext(url, ctx)
 	if err != nil {
 		return nil, fmt.Errorf("RSS source at %s returned an error: %w", url, err)
