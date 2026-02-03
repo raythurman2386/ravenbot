@@ -15,50 +15,71 @@ import (
 )
 
 func TestChat_Golden(t *testing.T) {
-	// 1. Setup Mock LLM
-	mockResponseText := "Hello! I am a simulated RavenBot."
-	mockLLM := &MockLLM{
-		Responses: []*model.LLMResponse{
-			NewTextResponse(mockResponseText),
+	// 1. Setup Mock LLMs
+	// Flash Mock:
+	// Call 1: Classification -> "Simple"
+	// Call 2: Chat response -> "Hello! I am a simulated RavenBot."
+	mockChatResponse := "Hello! I am a simulated RavenBot."
+	mockFlashLLM := &MockLLM{
+		QueuedResponses: [][]*model.LLMResponse{
+			{NewTextResponse("Simple")},
+			{NewTextResponse(mockChatResponse)},
 		},
 	}
 
+	// Pro Mock (not used in this simple flow)
+	mockProLLM := &MockLLM{
+		QueuedResponses: [][]*model.LLMResponse{},
+	}
+
 	// 2. Setup ADK Components
-	// We need a minimal config
 	cfg := &config.Config{
 		Bot: config.BotConfig{
-			Model:        "mock-model",
+			FlashModel:   "mock-flash",
+			ProModel:     "mock-pro",
 			SystemPrompt: "You are a test bot.",
 		},
 	}
 
-	// Initialize ADK Agent with Mock LLM
-	adkAgent, err := llmagent.New(llmagent.Config{
-		Name:  "test-agent",
-		Model: mockLLM,
+	// Initialize ADK Agents
+	flashAgent, err := llmagent.New(llmagent.Config{
+		Name:  "test-flash",
+		Model: mockFlashLLM,
+	})
+	require.NoError(t, err)
+
+	proAgent, err := llmagent.New(llmagent.Config{
+		Name:  "test-pro",
+		Model: mockProLLM,
 	})
 	require.NoError(t, err)
 
 	// Initialize Session Service (In-Memory)
 	sessionService := session.InMemoryService()
 
-	// Initialize Runner
-	adkRunner, err := runner.New(runner.Config{
+	// Initialize Runners
+	flashRunner, err := runner.New(runner.Config{
 		AppName:        "test-app",
-		Agent:          adkAgent,
+		Agent:          flashAgent,
+		SessionService: sessionService,
+	})
+	require.NoError(t, err)
+
+	proRunner, err := runner.New(runner.Config{
+		AppName:        "test-app",
+		Agent:          proAgent,
 		SessionService: sessionService,
 	})
 	require.NoError(t, err)
 
 	// 3. Construct the RavenBot Agent manually
-	// We don't use NewAgent because we want to inject our mocked components
-	// and we don't want to trigger real API calls.
 	ravenAgent := &Agent{
 		cfg:            cfg,
-		db:             &db.DB{}, // Mock DB if needed, but nil might panic if used
-		adkLLM:         mockLLM,
-		adkAgent:       adkAgent,
-		adkRunner:      adkRunner,
+		db:             &db.DB{},
+		flashLLM:       mockFlashLLM,
+		proLLM:         mockProLLM,
+		flashRunner:    flashRunner,
+		proRunner:      proRunner,
 		sessionService: sessionService,
 	}
 
@@ -80,6 +101,7 @@ func TestChat_Golden(t *testing.T) {
 
 	// 5. Assertions
 	require.NoError(t, err)
-	assert.Equal(t, mockResponseText, response)
-	assert.Equal(t, 1, mockLLM.CallCount, "LLM should have been called exactly once")
+	assert.Equal(t, mockChatResponse, response)
+	assert.Equal(t, 2, mockFlashLLM.CallCount, "Flash LLM should have been called twice (classify + chat)")
+	assert.Equal(t, 0, mockProLLM.CallCount, "Pro LLM should not have been called")
 }

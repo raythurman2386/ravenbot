@@ -9,8 +9,8 @@ import (
 )
 
 type MockLLM struct {
-	Responses []*model.LLMResponse
-	CallCount int
+	QueuedResponses [][]*model.LLMResponse
+	CallCount       int
 }
 
 func (m *MockLLM) Name() string {
@@ -18,9 +18,14 @@ func (m *MockLLM) Name() string {
 }
 
 func (m *MockLLM) GenerateContent(ctx context.Context, req *model.LLMRequest, stream bool) iter.Seq2[*model.LLMResponse, error] {
+	var responses []*model.LLMResponse
+	if m.CallCount < len(m.QueuedResponses) {
+		responses = m.QueuedResponses[m.CallCount]
+	}
 	m.CallCount++
+
 	return func(yield func(*model.LLMResponse, error) bool) {
-		for _, resp := range m.Responses {
+		for _, resp := range responses {
 			if !yield(resp, nil) {
 				return
 			}
