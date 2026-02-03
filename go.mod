@@ -11,7 +11,7 @@ require (
 	github.com/mmcdole/gofeed v1.3.0
 	github.com/raythurman2386/cronlib v0.1.0
 	github.com/stretchr/testify v1.11.1
-	google.golang.org/adk v0.2.0
+	google.golang.org/adk v0.4.0
 	google.golang.org/genai v1.44.0
 	modernc.org/sqlite v1.44.3
 )
