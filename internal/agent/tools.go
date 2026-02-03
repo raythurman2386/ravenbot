@@ -74,7 +74,7 @@ func (a *Agent) GetTechnicalTools() []tool.Tool {
 		Name:        "BrowseWeb",
 		Description: "Renders a webpage using a headless browser. Use this for JavaScript-heavy or single-page applications.",
 	}, func(ctx tool.Context, args BrowseWebArgs) (string, error) {
-		return tools.BrowseWeb(ctx, args.URL)
+		return a.browserManager.Browse(ctx, args.URL)
 	})
 	if err == nil {
 		technicalTools = append(technicalTools, browseWebTool)
