@@ -1,0 +1,39 @@
+package tools
+
+import (
+	"context"
+	"os"
+	"testing"
+)
+
+func TestValidateURL(t *testing.T) {
+	tests := []struct {
+		name       string
+		url        string
+		allowLocal bool
+		wantErr    bool
+	}{
+		{"Valid public URL", "https://www.google.com", false, false},
+		{"Loopback IP", "http://127.0.0.1", false, true},
+		{"Loopback hostname", "http://localhost", false, true},
+		{"Private IP range", "http://192.168.1.1", false, true},
+		{"Invalid scheme", "ftp://google.com", false, true},
+		{"Allow local URLs", "http://127.0.0.1", true, false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if tt.allowLocal {
+				os.Setenv("ALLOW_LOCAL_URLS", "true")
+				defer os.Unsetenv("ALLOW_LOCAL_URLS")
+			} else {
+				os.Unsetenv("ALLOW_LOCAL_URLS")
+			}
+
+			err := ValidateURL(context.Background(), tt.url)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("ValidateURL() error = %v, wantErr %v", err, tt.wantErr)
+			}
+		})
+	}
+}

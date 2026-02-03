@@ -12,6 +12,10 @@ import (
 
 // BrowseWeb navigates to a URL and extracts the textual content using chromedp.
 func BrowseWeb(ctx context.Context, url string) (string, error) {
+	if err := ValidateURL(ctx, url); err != nil {
+		return "", err
+	}
+
 	// Create a timeout for the browser action
 	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
 	defer cancel()
