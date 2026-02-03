@@ -26,9 +26,10 @@ import (
 	"google.golang.org/genai"
 )
 
-const AppName = "ravenbot"
-
 type Agent struct {
+	Name         string
+	SystemPrompt string
+
 	cfg        *config.Config
 	db         *db.DB
 	mcpClients map[string]*mcp.Client
@@ -50,18 +51,20 @@ type Agent struct {
 	sessionService session.Service
 }
 
-func NewAgent(ctx context.Context, cfg *config.Config, database *db.DB) (*Agent, error) {
+// New creates a new agent instance
+func New(ctx context.Context, name, systemPrompt string, deps *SharedResources) (*Agent, error) {
 	// 1. Initialize ADK Models (Flash & Pro)
-	flashLLM, err := gemini.NewModel(ctx, cfg.Bot.FlashModel, &genai.ClientConfig{
-		APIKey:  cfg.GeminiAPIKeys[rand.Intn(len(cfg.GeminiAPIKeys))],
+	// We use the shared config for API keys and model names
+	flashLLM, err := gemini.NewModel(ctx, deps.Config.Bot.FlashModel, &genai.ClientConfig{
+		APIKey:  deps.Config.GeminiAPIKeys[rand.Intn(len(deps.Config.GeminiAPIKeys))],
 		Backend: genai.BackendGeminiAPI,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("failed to create ADK Gemini Flash model: %w", err)
 	}
 
-	proLLM, err := gemini.NewModel(ctx, cfg.Bot.ProModel, &genai.ClientConfig{
-		APIKey:  cfg.GeminiAPIKeys[rand.Intn(len(cfg.GeminiAPIKeys))],
+	proLLM, err := gemini.NewModel(ctx, deps.Config.Bot.ProModel, &genai.ClientConfig{
+		APIKey:  deps.Config.GeminiAPIKeys[rand.Intn(len(deps.Config.GeminiAPIKeys))],
 		Backend: genai.BackendGeminiAPI,
 	})
 	if err != nil {
@@ -69,52 +72,19 @@ func NewAgent(ctx context.Context, cfg *config.Config, database *db.DB) (*Agent,
 	}
 
 	a := &Agent{
-		cfg:            cfg,
-		db:             database,
-		mcpClients:     make(map[string]*mcp.Client),
+		Name:           name,
+		SystemPrompt:   systemPrompt,
+		cfg:            deps.Config,
+		db:             deps.DB,
+		mcpClients:     deps.MCPClients,
+		browserManager: deps.BrowserManager,
+		sessionService: deps.SessionService,
 		summaries:      make(map[string]string),
 		flashLLM:       flashLLM,
 		proLLM:         proLLM,
-		browserManager: tools.NewBrowserManager(ctx),
 	}
 
-	// 3. Initialize MCP Servers
-	var wg sync.WaitGroup
-	for name, serverCfg := range cfg.MCPServers {
-		wg.Add(1)
-		go func(name string, serverCfg config.MCPServerConfig) {
-			defer wg.Done()
-			slog.Info("Initializing MCP Server", "name", name, "command", serverCfg.Command)
-			var mcpClient *mcp.Client
-			if strings.HasPrefix(serverCfg.Command, "http://") || strings.HasPrefix(serverCfg.Command, "https://") {
-				mcpClient = mcp.NewSSEClient(serverCfg.Command)
-			} else {
-				mcpClient = mcp.NewStdioClient(serverCfg.Command, serverCfg.Args)
-			}
-
-			if err := mcpClient.Start(); err != nil {
-				slog.Error("Failed to start MCP server", "name", name, "error", err)
-				return
-			}
-
-			if err := mcpClient.Initialize(); err != nil {
-				slog.Error("Failed to initialize MCP server", "name", name, "error", err)
-				mcpClient.Close()
-				return
-			}
-
-			a.mu.Lock()
-			a.mcpClients[name] = mcpClient
-			a.mu.Unlock()
-		}(name, serverCfg)
-	}
-	wg.Wait()
-
-	// 4. Initialize Session Service
-	sessionService := session.InMemoryService()
-	a.sessionService = sessionService
-
-	// 5. Gather Tools and Create Sub-Agents
+	// 2. Gather Tools and Create Sub-Agents
 	technicalTools := a.GetTechnicalTools()
 	coreTools := a.GetCoreTools()
 
@@ -133,11 +103,12 @@ func NewAgent(ctx context.Context, cfg *config.Config, database *db.DB) (*Agent,
 	}
 
 	// Create Research Assistant Sub-Agent (Uses Pro Model)
+	// We use the shared research system prompt from config
 	researchAssistant, err := llmagent.New(llmagent.Config{
 		Name:        "ResearchAssistant",
 		Model:       proLLM,
 		Description: "A specialized assistant for technical research, web search, system diagnostics, GitHub, and repository management.",
-		Instruction: cfg.Bot.ResearchSystemPrompt,
+		Instruction: deps.Config.Bot.ResearchSystemPrompt,
 		Tools:       append(technicalTools, researchMCPTools...),
 	})
 	if err != nil {
@@ -153,6 +124,9 @@ func NewAgent(ctx context.Context, cfg *config.Config, database *db.DB) (*Agent,
 		Description: "A specialized assistant for technical research, web search, system diagnostics, and shell commands.",
 	}, func(ctx tool.Context, args ResearchAssistantArgs) (map[string]any, error) {
 		// 1. Create sub-session for the research assistant
+		// Use a unique AppName for the sub-session to avoid collisions, but scoped to this agent
+		subAppName := name + "-ResearchAssistant"
+
 		stateMap := make(map[string]any)
 		for k, v := range ctx.State().All() {
 			if !strings.HasPrefix(k, "_adk") {
@@ -160,8 +134,8 @@ func NewAgent(ctx context.Context, cfg *config.Config, database *db.DB) (*Agent,
 			}
 		}
 
-		subSession, err := sessionService.Create(ctx, &session.CreateRequest{
-			AppName: "ResearchAssistant",
+		subSession, err := deps.SessionService.Create(ctx, &session.CreateRequest{
+			AppName: subAppName,
 			UserID:  ctx.UserID(),
 			State:   stateMap,
 		})
@@ -171,9 +145,9 @@ func NewAgent(ctx context.Context, cfg *config.Config, database *db.DB) (*Agent,
 
 		// 2. Create a one-off runner for this call
 		r, err := runner.New(runner.Config{
-			AppName:        "ResearchAssistant",
+			AppName:        subAppName,
 			Agent:          researchAssistant,
-			SessionService: sessionService,
+			SessionService: deps.SessionService,
 		})
 		if err != nil {
 			return nil, fmt.Errorf("failed to create sub-runner: %w", err)
@@ -223,9 +197,9 @@ func NewAgent(ctx context.Context, cfg *config.Config, database *db.DB) (*Agent,
 		a.summariesMu.RUnlock()
 
 		if summary != "" {
-			return fmt.Sprintf("%s\n\n### CONTEXT SUMMARY OF PREVIOUS CONVERSATION:\n%s", a.cfg.Bot.SystemPrompt, summary), nil
+			return fmt.Sprintf("%s\n\n### CONTEXT SUMMARY OF PREVIOUS CONVERSATION:\n%s", a.SystemPrompt, summary), nil
 		}
-		return a.cfg.Bot.SystemPrompt, nil
+		return a.SystemPrompt, nil
 	}
 
 	// Callback for context compression
@@ -248,9 +222,9 @@ func NewAgent(ctx context.Context, cfg *config.Config, database *db.DB) (*Agent,
 
 	// 5. Create Root ADK LLMAgents (One for Flash, one for Pro)
 	flashAgent, err := llmagent.New(llmagent.Config{
-		Name:                "ravenbot-flash",
+		Name:                name + "-flash",
 		Model:               flashLLM,
-		Description:         "RavenBot Flash Agent",
+		Description:         name + " Flash Agent",
 		InstructionProvider: instructionProvider,
 		Tools:               allRootTools,
 		AfterModelCallbacks: []llmagent.AfterModelCallback{afterModelCallback},
@@ -260,9 +234,9 @@ func NewAgent(ctx context.Context, cfg *config.Config, database *db.DB) (*Agent,
 	}
 
 	proAgent, err := llmagent.New(llmagent.Config{
-		Name:                "ravenbot-pro",
+		Name:                name + "-pro",
 		Model:               proLLM,
-		Description:         "RavenBot Pro Agent",
+		Description:         name + " Pro Agent",
 		InstructionProvider: instructionProvider,
 		Tools:               allRootTools,
 		AfterModelCallbacks: []llmagent.AfterModelCallback{afterModelCallback},
@@ -273,9 +247,9 @@ func NewAgent(ctx context.Context, cfg *config.Config, database *db.DB) (*Agent,
 
 	// 6. Create ADK Runners
 	flashRunner, err := runner.New(runner.Config{
-		AppName:        AppName,
+		AppName:        name,
 		Agent:          flashAgent,
-		SessionService: sessionService,
+		SessionService: deps.SessionService,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("failed to create Flash runner: %w", err)
@@ -283,9 +257,9 @@ func NewAgent(ctx context.Context, cfg *config.Config, database *db.DB) (*Agent,
 	a.flashRunner = flashRunner
 
 	proRunner, err := runner.New(runner.Config{
-		AppName:        AppName,
+		AppName:        name,
 		Agent:          proAgent,
-		SessionService: sessionService,
+		SessionService: deps.SessionService,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("failed to create Pro runner: %w", err)
@@ -315,18 +289,18 @@ func (a *Agent) compressContext(sessionID string) {
 	slog.Info("Context compressed successfully", "sessionID", sessionID)
 }
 
-// Close cleans up the agent's resources, including the browser manager.
+// Close cleans up the agent's resources.
+// Note: Shared resources (like BrowserManager) are managed by the Manager, not the individual Agent.
 func (a *Agent) Close() {
-	if a.browserManager != nil {
-		a.browserManager.Close()
-	}
+	// Individual agent cleanup if needed.
+	// Currently nothing specific to cleanup for a single agent instance that isn't shared.
 }
 
 // ClearSession removes a chat session (useful for /reset command)
 func (a *Agent) ClearSession(sessionID string) {
 	userID := "default-user"
 	if err := a.sessionService.Delete(context.Background(), &session.DeleteRequest{
-		AppName:   AppName,
+		AppName:   a.Name,
 		UserID:    userID,
 		SessionID: sessionID,
 	}); err != nil {
@@ -370,20 +344,20 @@ Respond with ONLY the word "Simple" or "Complex".`, message)
 
 // Chat handles conversational messages with session persistence and dynamic model routing.
 func (a *Agent) Chat(ctx context.Context, sessionID, message string) (string, error) {
-	slog.Info("Agent.Chat called", "sessionID", sessionID, "messageLength", len(message))
+	slog.Info("Agent.Chat called", "agent", a.Name, "sessionID", sessionID, "messageLength", len(message))
 
 	userID := "default-user"
 
 	// Ensure session exists
 	_, err := a.sessionService.Get(ctx, &session.GetRequest{
-		AppName:   AppName,
+		AppName:   a.Name,
 		UserID:    userID,
 		SessionID: sessionID,
 	})
 	if err != nil {
 		slog.Info("Session not found, creating new one", "sessionID", sessionID)
 		_, err = a.sessionService.Create(ctx, &session.CreateRequest{
-			AppName:   AppName,
+			AppName:   a.Name,
 			UserID:    userID,
 			SessionID: sessionID,
 		})
@@ -421,10 +395,11 @@ func (a *Agent) Chat(ctx context.Context, sessionID, message string) (string, er
 func (a *Agent) RunMission(ctx context.Context, prompt string) (string, error) {
 	missionID := fmt.Sprintf("mission-%d", time.Now().UnixNano())
 	userID := "mission-user"
+	appName := a.Name // Using agent name as app name for missions too
 
 	// Create session for the mission
 	_, err := a.sessionService.Create(ctx, &session.CreateRequest{
-		AppName:   AppName,
+		AppName:   appName,
 		UserID:    userID,
 		SessionID: missionID,
 	})
@@ -435,7 +410,7 @@ func (a *Agent) RunMission(ctx context.Context, prompt string) (string, error) {
 	// Ensure cleanup after mission
 	defer func() {
 		if err := a.sessionService.Delete(context.Background(), &session.DeleteRequest{
-			AppName:   AppName,
+			AppName:   appName,
 			UserID:    userID,
 			SessionID: missionID,
 		}); err != nil {
@@ -456,7 +431,7 @@ func (a *Agent) RunMission(ctx context.Context, prompt string) (string, error) {
 
 	// Create a temporary runner for the mission
 	missionRunner, err := runner.New(runner.Config{
-		AppName:        AppName,
+		AppName:        appName,
 		Agent:          missionAgent,
 		SessionService: a.sessionService,
 	})

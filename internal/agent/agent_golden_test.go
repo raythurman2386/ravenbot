@@ -74,6 +74,8 @@ func TestChat_Golden(t *testing.T) {
 
 	// 3. Construct the RavenBot Agent manually
 	ravenAgent := &Agent{
+		Name:           "test-app",
+		SystemPrompt:   "You are a test bot.",
 		cfg:            cfg,
 		db:             &db.DB{},
 		flashLLM:       mockFlashLLM,

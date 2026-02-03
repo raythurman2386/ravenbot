@@ -80,10 +80,39 @@ func main() {
 	}
 	defer database.Close()
 
-	bot, err := agent.NewAgent(ctx, cfg, database)
+	// Initialize Agent Manager
+	manager, err := agent.NewManager(ctx, cfg, database)
 	if err != nil {
-		slog.Error("Failed to create agent", "error", err)
+		slog.Error("Failed to create agent manager", "error", err)
 		os.Exit(1)
+	}
+
+	// Spawn default RavenBot agent
+	defaultBot, err := manager.Spawn(ctx, "ravenbot", cfg.Bot.SystemPrompt)
+	if err != nil {
+		slog.Error("Failed to spawn default agent", "error", err)
+		os.Exit(1)
+	}
+
+	// Session Routing Map: sessionID -> agentName
+	activeAgents := make(map[string]string)
+	var activeAgentsMu sync.RWMutex
+
+	getAgentForSession := func(sessionID string) *agent.Agent {
+		activeAgentsMu.RLock()
+		agentName, ok := activeAgents[sessionID]
+		activeAgentsMu.RUnlock()
+
+		if !ok {
+			return defaultBot
+		}
+
+		bot, err := manager.Get(agentName)
+		if err != nil {
+			slog.Warn("Active agent not found, falling back to default", "agent", agentName, "sessionID", sessionID)
+			return defaultBot
+		}
+		return bot
 	}
 
 	scheduler := cronlib.NewCron()
@@ -123,11 +152,49 @@ func main() {
 			defer stopTyping()
 		}
 
+		bot := getAgentForSession(sessionID)
+
 		// Handle special commands first
 		lowerText := strings.ToLower(text)
 		switch {
 		case lowerText == "/help" || strings.HasPrefix(lowerText, "/help "):
-			reply(cfg.Bot.HelpMessage)
+			helpMsg := cfg.Bot.HelpMessage + "\n**Agent Management:**\n• `/spawn <name> <prompt>` - Create new agent\n• `/switch <name>` - Switch to agent\n• `/agents` - List agents"
+			reply(helpMsg)
+			return
+
+		case lowerText == "/agents":
+			agents := manager.List()
+			reply(fmt.Sprintf("🤖 **Active Agents:**\n- %s", strings.Join(agents, "\n- ")))
+			return
+
+		case strings.HasPrefix(lowerText, "/spawn "):
+			parts := strings.SplitN(text[len("/spawn"):], " ", 2)
+			if len(parts) < 2 {
+				reply("Usage: `/spawn <name> <system prompt>`")
+				return
+			}
+			name := strings.TrimSpace(parts[0])
+			prompt := strings.TrimSpace(parts[1])
+
+			if _, err := manager.Spawn(ctx, name, prompt); err != nil {
+				reply(fmt.Sprintf("❌ Failed to spawn agent: %v", err))
+				return
+			}
+			reply(fmt.Sprintf("✅ Agent **%s** spawned successfully! Use `/switch %s` to talk to it.", name, name))
+			return
+
+		case strings.HasPrefix(lowerText, "/switch "):
+			name := strings.TrimSpace(text[len("/switch"):])
+			if _, err := manager.Get(name); err != nil {
+				reply(fmt.Sprintf("❌ Agent **%s** not found.", name))
+				return
+			}
+
+			activeAgentsMu.Lock()
+			activeAgents[sessionID] = name
+			activeAgentsMu.Unlock()
+
+			reply(fmt.Sprintf("🔀 Switched to agent **%s**.", name))
 			return
 
 		case lowerText == "/status" || strings.HasPrefix(lowerText, "/status "):
@@ -239,7 +306,7 @@ func main() {
 	for _, job := range cfg.Jobs {
 		job := job // Capture loop variable
 		_, err = scheduler.AddJobWithOptions(job.Schedule, func(ctx context.Context) {
-			runJob(ctx, job, bot, notifiers)
+			runJob(ctx, job, defaultBot, notifiers)
 		}, cronlib.JobOptions{
 			Overlap: cronlib.OverlapForbid,
 		})
@@ -260,7 +327,7 @@ func main() {
 	<-sigChan
 	slog.Info("Shutting down ravenbot...")
 	scheduler.Stop()
-	bot.Close()
+	manager.Close()
 	cancel()
 	slog.Info("ravenbot stopped gracefully.")
 }

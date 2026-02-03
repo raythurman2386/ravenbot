@@ -89,12 +89,15 @@ func TestDeduplicationToolLogic(t *testing.T) {
 
 func TestClearSession(t *testing.T) {
 	service := session.InMemoryService()
-	a := &Agent{sessionService: service}
+	a := &Agent{
+		Name:           "test-app",
+		sessionService: service,
+	}
 
 	ctx := context.Background()
 	userID := "default-user"
 	sessionID := "test-session"
-	appName := AppName
+	appName := a.Name
 
 	// Create a session
 	_, err := service.Create(ctx, &session.CreateRequest{
