@@ -47,6 +47,10 @@
                 "-y",
                 "@modelcontextprotocol/server-memory"
             ]
+        },
+        "weather": {
+            "command": "/home/rthurman/Work/goweathermcp/bin/goweathermcp",
+            "args": ["-temp-unit", "fahrenheit", "-wind-unit", "mph", "-precip-unit", "inch"]
         }
     },
     "jobs": [

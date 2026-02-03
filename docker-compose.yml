@@ -19,6 +19,7 @@ services:
       - ./daily_logs:/app/daily_logs
       - ./data:/app/data
       - /var/run/docker.sock:/var/run/docker.sock
+      - ../goweathermcp:/home/rthurman/Work/goweathermcp
     logging:
       driver: "json-file"
       options:
