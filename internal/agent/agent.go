@@ -327,7 +327,7 @@ Respond with ONLY the word "Simple" or "Complex".`, message)
 
 	respIter := a.flashLLM.GenerateContent(ctx, &model.LLMRequest{
 		Contents: []*genai.Content{{
-			Role: "user",
+			Role:  "user",
 			Parts: []*genai.Part{{Text: prompt}},
 		}},
 	}, false)
