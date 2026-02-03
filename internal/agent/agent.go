@@ -13,6 +13,7 @@ import (
 	"github.com/raythurman2386/ravenbot/internal/config"
 	"github.com/raythurman2386/ravenbot/internal/db"
 	"github.com/raythurman2386/ravenbot/internal/mcp"
+	"github.com/raythurman2386/ravenbot/internal/tools"
 
 	"google.golang.org/adk/agent"
 	"google.golang.org/adk/agent/llmagent"
@@ -32,6 +33,8 @@ type Agent struct {
 	db         *db.DB
 	mcpClients map[string]*mcp.Client
 	mu         sync.RWMutex
+
+	browserManager *tools.BrowserManager
 
 	// Summaries for context compression
 	summaries   map[string]string
@@ -66,12 +69,13 @@ func NewAgent(ctx context.Context, cfg *config.Config, database *db.DB) (*Agent,
 	}
 
 	a := &Agent{
-		cfg:        cfg,
-		db:         database,
-		mcpClients: make(map[string]*mcp.Client),
-		summaries:  make(map[string]string),
-		flashLLM:   flashLLM,
-		proLLM:     proLLM,
+		cfg:            cfg,
+		db:             database,
+		mcpClients:     make(map[string]*mcp.Client),
+		summaries:      make(map[string]string),
+		flashLLM:       flashLLM,
+		proLLM:         proLLM,
+		browserManager: tools.NewBrowserManager(ctx),
 	}
 
 	// 3. Initialize MCP Servers
@@ -303,6 +307,13 @@ func (a *Agent) compressContext(sessionID string) {
 	// Clear the session so the next turn starts with a fresh context (using the summary in instructions)
 	a.ClearSession(sessionID)
 	slog.Info("Context compressed successfully", "sessionID", sessionID)
+}
+
+// Close cleans up the agent's resources, including the browser manager.
+func (a *Agent) Close() {
+	if a.browserManager != nil {
+		a.browserManager.Close()
+	}
 }
 
 // ClearSession removes a chat session (useful for /reset command)
