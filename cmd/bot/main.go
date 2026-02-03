@@ -260,6 +260,7 @@ func main() {
 	<-sigChan
 	slog.Info("Shutting down ravenbot...")
 	scheduler.Stop()
+	bot.Close()
 	cancel()
 	slog.Info("ravenbot stopped gracefully.")
 }
