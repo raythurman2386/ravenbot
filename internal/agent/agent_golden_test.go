@@ -5,7 +5,6 @@ import (
 	"testing"
 
 	"github.com/raythurman2386/ravenbot/internal/config"
-	"github.com/raythurman2386/ravenbot/internal/db"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/adk/agent/llmagent"
@@ -75,7 +74,7 @@ func TestChat_Golden(t *testing.T) {
 	// 3. Construct the RavenBot Agent manually
 	ravenAgent := &Agent{
 		cfg:            cfg,
-		db:             &db.DB{},
+		db:             nil,
 		flashLLM:       mockFlashLLM,
 		proLLM:         mockProLLM,
 		flashRunner:    flashRunner,

@@ -11,7 +11,7 @@ import (
 	"time"
 
 	"github.com/raythurman2386/ravenbot/internal/config"
-	"github.com/raythurman2386/ravenbot/internal/db"
+	raven "github.com/raythurman2386/ravenbot/internal/db"
 	"github.com/raythurman2386/ravenbot/internal/mcp"
 	"github.com/raythurman2386/ravenbot/internal/tools"
 
@@ -21,24 +21,23 @@ import (
 	"google.golang.org/adk/model/gemini"
 	"google.golang.org/adk/runner"
 	"google.golang.org/adk/session"
+	adkdb "google.golang.org/adk/session/database"
 	"google.golang.org/adk/tool"
 	"google.golang.org/adk/tool/functiontool"
 	"google.golang.org/genai"
+	"gorm.io/driver/sqlite"
+	"gorm.io/gorm"
 )
 
 const AppName = "ravenbot"
 
 type Agent struct {
 	cfg        *config.Config
-	db         *db.DB
+	db         *raven.DB
 	mcpClients map[string]*mcp.Client
 	mu         sync.RWMutex
 
 	browserManager *tools.BrowserManager
-
-	// Summaries for context compression
-	summaries   map[string]string
-	summariesMu sync.RWMutex
 
 	// ADK components
 	flashLLM model.LLM
@@ -50,7 +49,7 @@ type Agent struct {
 	sessionService session.Service
 }
 
-func NewAgent(ctx context.Context, cfg *config.Config, database *db.DB) (*Agent, error) {
+func NewAgent(ctx context.Context, cfg *config.Config, database *raven.DB) (*Agent, error) {
 	// 1. Initialize ADK Models (Flash & Pro)
 	flashLLM, err := gemini.NewModel(ctx, cfg.Bot.FlashModel, &genai.ClientConfig{
 		APIKey:  cfg.GeminiAPIKeys[rand.Intn(len(cfg.GeminiAPIKeys))],
@@ -72,7 +71,6 @@ func NewAgent(ctx context.Context, cfg *config.Config, database *db.DB) (*Agent,
 		cfg:            cfg,
 		db:             database,
 		mcpClients:     make(map[string]*mcp.Client),
-		summaries:      make(map[string]string),
 		flashLLM:       flashLLM,
 		proLLM:         proLLM,
 		browserManager: tools.NewBrowserManager(ctx),
@@ -110,8 +108,23 @@ func NewAgent(ctx context.Context, cfg *config.Config, database *db.DB) (*Agent,
 	}
 	wg.Wait()
 
-	// 4. Initialize Session Service
-	sessionService := session.InMemoryService()
+	// 4. Initialize Session Service (SQLite Persistent)
+	dbPath := "data/ravenbot.db"
+	gormDB, err := gorm.Open(sqlite.Open(dbPath), &gorm.Config{})
+	if err != nil {
+		return nil, fmt.Errorf("failed to open gorm db for sessions: %w", err)
+	}
+
+	sessionService, err := adkdb.NewSessionService(gormDB.Dialector)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create ADK session service: %w", err)
+	}
+
+	// Auto-migrate the session schema
+	if err := adkdb.AutoMigrate(sessionService); err != nil {
+		return nil, fmt.Errorf("failed to auto-migrate session schema: %w", err)
+	}
+
 	a.sessionService = sessionService
 
 	// 5. Gather Tools and Create Sub-Agents
@@ -218,9 +231,14 @@ func NewAgent(ctx context.Context, cfg *config.Config, database *db.DB) (*Agent,
 
 	// Instruction provider logic
 	instructionProvider := func(ctx agent.ReadonlyContext) (string, error) {
-		a.summariesMu.RLock()
-		summary := a.summaries[ctx.SessionID()]
-		a.summariesMu.RUnlock()
+		var summary string
+		var err error
+		if a.db != nil {
+			summary, err = a.db.GetSessionSummary(ctx, ctx.SessionID())
+			if err != nil {
+				slog.Error("Failed to fetch session summary from DB", "sessionID", ctx.SessionID(), "error", err)
+			}
+		}
 
 		if summary != "" {
 			return fmt.Sprintf("%s\n\n### CONTEXT SUMMARY OF PREVIOUS CONVERSATION:\n%s", a.cfg.Bot.SystemPrompt, summary), nil
@@ -306,12 +324,22 @@ func (a *Agent) compressContext(sessionID string) {
 		return
 	}
 
-	a.summariesMu.Lock()
-	a.summaries[sessionID] = summary
-	a.summariesMu.Unlock()
+	if a.db != nil {
+		if err := a.db.SaveSessionSummary(ctx, sessionID, summary); err != nil {
+			slog.Error("Failed to persist session summary", "sessionID", sessionID, "error", err)
+		}
+	}
 
-	// Clear the session so the next turn starts with a fresh context (using the summary in instructions)
-	a.ClearSession(sessionID)
+	// Clear only the ADK session events/state to free up the window.
+	// We do NOT call a.ClearSession here because that would also delete the summary we just saved.
+	if err := a.sessionService.Delete(ctx, &session.DeleteRequest{
+		AppName:   AppName,
+		UserID:    "default-user",
+		SessionID: sessionID,
+	}); err != nil {
+		slog.Error("Failed to clear session during compression", "sessionID", sessionID, "error", err)
+	}
+
 	slog.Info("Context compressed successfully", "sessionID", sessionID)
 }
 
@@ -325,7 +353,16 @@ func (a *Agent) Close() {
 // ClearSession removes a chat session (useful for /reset command)
 func (a *Agent) ClearSession(sessionID string) {
 	userID := "default-user"
-	if err := a.sessionService.Delete(context.Background(), &session.DeleteRequest{
+	ctx := context.Background()
+
+	// Clear persisted summary when session is cleared
+	if a.db != nil {
+		if err := a.db.DeleteSessionSummary(ctx, sessionID); err != nil {
+			slog.Warn("Failed to delete session summary during clear", "sessionID", sessionID, "error", err)
+		}
+	}
+
+	if err := a.sessionService.Delete(ctx, &session.DeleteRequest{
 		AppName:   AppName,
 		UserID:    userID,
 		SessionID: sessionID,

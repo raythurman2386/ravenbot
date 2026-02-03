@@ -2,6 +2,7 @@ package db
 
 import (
 	"context"
+	"database/sql"
 	"fmt"
 	"strings"
 )
@@ -95,6 +96,46 @@ func (db *DB) AddHeadlines(ctx context.Context, headlines []Headline) error {
 
 	if err := tx.Commit(); err != nil {
 		return fmt.Errorf("failed to commit transaction: %w", err)
+	}
+	return nil
+}
+
+// SaveSessionSummary persists a conversation summary for a specific session.
+func (db *DB) SaveSessionSummary(ctx context.Context, sessionID, summary string) error {
+	query := `
+		INSERT INTO session_summaries (session_id, summary, updated_at)
+		VALUES (?, ?, CURRENT_TIMESTAMP)
+		ON CONFLICT(session_id) DO UPDATE SET
+			summary = excluded.summary,
+			updated_at = CURRENT_TIMESTAMP
+	`
+	_, err := db.ExecContext(ctx, query, sessionID, summary)
+	if err != nil {
+		return fmt.Errorf("failed to save session summary: %w", err)
+	}
+	return nil
+}
+
+// GetSessionSummary retrieves the persisted summary for a session.
+func (db *DB) GetSessionSummary(ctx context.Context, sessionID string) (string, error) {
+	var summary string
+	query := `SELECT summary FROM session_summaries WHERE session_id = ?`
+	err := db.QueryRowContext(ctx, query, sessionID).Scan(&summary)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return "", nil
+		}
+		return "", fmt.Errorf("failed to get session summary: %w", err)
+	}
+	return summary, nil
+}
+
+// DeleteSessionSummary removes a persisted summary.
+func (db *DB) DeleteSessionSummary(ctx context.Context, sessionID string) error {
+	query := `DELETE FROM session_summaries WHERE session_id = ?`
+	_, err := db.ExecContext(ctx, query, sessionID)
+	if err != nil {
+		return fmt.Errorf("failed to delete session summary: %w", err)
 	}
 	return nil
 }
