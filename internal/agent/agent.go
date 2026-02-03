@@ -79,30 +79,36 @@ func NewAgent(ctx context.Context, cfg *config.Config, database *db.DB) (*Agent,
 	}
 
 	// 3. Initialize MCP Servers
+	var wg sync.WaitGroup
 	for name, serverCfg := range cfg.MCPServers {
-		slog.Info("Initializing MCP Server", "name", name, "command", serverCfg.Command)
-		var mcpClient *mcp.Client
-		if strings.HasPrefix(serverCfg.Command, "http://") || strings.HasPrefix(serverCfg.Command, "https://") {
-			mcpClient = mcp.NewSSEClient(serverCfg.Command)
-		} else {
-			mcpClient = mcp.NewStdioClient(serverCfg.Command, serverCfg.Args)
-		}
+		wg.Add(1)
+		go func(name string, serverCfg config.MCPServerConfig) {
+			defer wg.Done()
+			slog.Info("Initializing MCP Server", "name", name, "command", serverCfg.Command)
+			var mcpClient *mcp.Client
+			if strings.HasPrefix(serverCfg.Command, "http://") || strings.HasPrefix(serverCfg.Command, "https://") {
+				mcpClient = mcp.NewSSEClient(serverCfg.Command)
+			} else {
+				mcpClient = mcp.NewStdioClient(serverCfg.Command, serverCfg.Args)
+			}
 
-		if err := mcpClient.Start(); err != nil {
-			slog.Error("Failed to start MCP server", "name", name, "error", err)
-			continue
-		}
+			if err := mcpClient.Start(); err != nil {
+				slog.Error("Failed to start MCP server", "name", name, "error", err)
+				return
+			}
 
-		if err := mcpClient.Initialize(); err != nil {
-			slog.Error("Failed to initialize MCP server", "name", name, "error", err)
-			mcpClient.Close()
-			continue
-		}
+			if err := mcpClient.Initialize(); err != nil {
+				slog.Error("Failed to initialize MCP server", "name", name, "error", err)
+				mcpClient.Close()
+				return
+			}
 
-		a.mu.Lock()
-		a.mcpClients[name] = mcpClient
-		a.mu.Unlock()
+			a.mu.Lock()
+			a.mcpClients[name] = mcpClient
+			a.mu.Unlock()
+		}(name, serverCfg)
 	}
+	wg.Wait()
 
 	// 4. Initialize Session Service
 	sessionService := session.InMemoryService()
