@@ -36,7 +36,7 @@ type Config struct {
 	GeminiAPIKeys    []string
 	TelegramBotToken string
 	TelegramChatID   int64
-	DiscordBotToken  string
+	DiscordBotTokens []string
 	DiscordChannelID string
 	JulesAPIKey      string
 	Bot              BotConfig                  `json:"bot"`
@@ -63,10 +63,20 @@ func LoadConfig() (*Config, error) {
 		return nil, fmt.Errorf("GEMINI_API_KEY environment variable is empty or invalid")
 	}
 
+	var discordTokens []string
+	if tokenEnv := os.Getenv("DISCORD_BOT_TOKEN"); tokenEnv != "" {
+		for _, key := range strings.Split(tokenEnv, ",") {
+			key = strings.TrimSpace(key)
+			if key != "" {
+				discordTokens = append(discordTokens, key)
+			}
+		}
+	}
+
 	cfg := &Config{
 		GeminiAPIKeys:    apiKeys,
 		TelegramBotToken: os.Getenv("TELEGRAM_BOT_TOKEN"),
-		DiscordBotToken:  os.Getenv("DISCORD_BOT_TOKEN"),
+		DiscordBotTokens: discordTokens,
 		DiscordChannelID: os.Getenv("DISCORD_CHANNEL_ID"),
 		JulesAPIKey:      os.Getenv("JULES_API_KEY"),
 		Bot:              BotConfig{},

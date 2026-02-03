@@ -100,8 +100,8 @@ func main() {
 		}
 	}
 
-	if cfg.DiscordBotToken != "" && cfg.DiscordChannelID != "" {
-		dn, err := notifier.NewDiscordNotifier(cfg.DiscordBotToken, cfg.DiscordChannelID)
+	if len(cfg.DiscordBotTokens) > 0 && cfg.DiscordChannelID != "" {
+		dn, err := notifier.NewDiscordNotifier(cfg.DiscordBotTokens, cfg.DiscordChannelID)
 		if err != nil {
 			slog.Warn("Failed to setup Discord notifier", "error", err)
 		} else {
