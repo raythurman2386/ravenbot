@@ -14,7 +14,20 @@ func TestLoadConfig(t *testing.T) {
 
 		cfg, err := LoadConfig()
 		assert.NoError(t, err)
-		assert.Equal(t, "test-key", cfg.GeminiAPIKey)
+		assert.Len(t, cfg.GeminiAPIKeys, 1)
+		assert.Equal(t, "test-key", cfg.GeminiAPIKeys[0])
+	})
+
+	t.Run("success multiple keys", func(t *testing.T) {
+		os.Setenv("GEMINI_API_KEY", "key1,key2, key3")
+		defer os.Unsetenv("GEMINI_API_KEY")
+
+		cfg, err := LoadConfig()
+		assert.NoError(t, err)
+		assert.Len(t, cfg.GeminiAPIKeys, 3)
+		assert.Equal(t, "key1", cfg.GeminiAPIKeys[0])
+		assert.Equal(t, "key2", cfg.GeminiAPIKeys[1])
+		assert.Equal(t, "key3", cfg.GeminiAPIKeys[2])
 	})
 
 	t.Run("missing key", func(t *testing.T) {
@@ -24,5 +37,15 @@ func TestLoadConfig(t *testing.T) {
 		assert.Error(t, err)
 		assert.Nil(t, cfg)
 		assert.Contains(t, err.Error(), "GEMINI_API_KEY environment variable is not set")
+	})
+
+	t.Run("empty key", func(t *testing.T) {
+		os.Setenv("GEMINI_API_KEY", "  , ,  ")
+		defer os.Unsetenv("GEMINI_API_KEY")
+
+		cfg, err := LoadConfig()
+		assert.Error(t, err)
+		assert.Nil(t, cfg)
+		assert.Contains(t, err.Error(), "GEMINI_API_KEY environment variable is empty or invalid")
 	})
 }

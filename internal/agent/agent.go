@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"iter"
 	"log/slog"
+	"math/rand"
 	"strings"
 	"sync"
 	"time"
@@ -49,7 +50,7 @@ type Agent struct {
 func NewAgent(ctx context.Context, cfg *config.Config, database *db.DB) (*Agent, error) {
 	// 1. Initialize ADK Models (Flash & Pro)
 	flashLLM, err := gemini.NewModel(ctx, cfg.Bot.FlashModel, &genai.ClientConfig{
-		APIKey:  cfg.GeminiAPIKey,
+		APIKey:  cfg.GeminiAPIKeys[rand.Intn(len(cfg.GeminiAPIKeys))],
 		Backend: genai.BackendGeminiAPI,
 	})
 	if err != nil {
@@ -57,7 +58,7 @@ func NewAgent(ctx context.Context, cfg *config.Config, database *db.DB) (*Agent,
 	}
 
 	proLLM, err := gemini.NewModel(ctx, cfg.Bot.ProModel, &genai.ClientConfig{
-		APIKey:  cfg.GeminiAPIKey,
+		APIKey:  cfg.GeminiAPIKeys[rand.Intn(len(cfg.GeminiAPIKeys))],
 		Backend: genai.BackendGeminiAPI,
 	})
 	if err != nil {
