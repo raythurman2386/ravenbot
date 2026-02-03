@@ -5,9 +5,9 @@ import (
 	"fmt"
 	"iter"
 	"log/slog"
-	"math/rand"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/raythurman2386/ravenbot/internal/config"
@@ -27,9 +27,24 @@ import (
 	"google.golang.org/adk/tool/functiontool"
 	"google.golang.org/genai"
 	"gorm.io/gorm"
+	"gorm.io/gorm/logger"
 )
 
 const AppName = "ravenbot"
+
+// keyCounter provides atomic round-robin API key rotation
+var keyCounter uint64
+
+// getNextAPIKey returns the next API key in round-robin fashion
+func getNextAPIKey(keys []string) string {
+	if len(keys) == 0 {
+		return ""
+	}
+	idx := atomic.AddUint64(&keyCounter, 1) - 1
+	key := keys[idx%uint64(len(keys))]
+	slog.Debug("Selected API key", "index", idx%uint64(len(keys)), "total_keys", len(keys))
+	return key
+}
 
 type Agent struct {
 	cfg        *config.Config
@@ -39,7 +54,7 @@ type Agent struct {
 
 	browserManager *tools.BrowserManager
 
-	// ADK components
+	// ADK components - these store the current models but can be rotated
 	flashLLM model.LLM
 	proLLM   model.LLM
 
@@ -49,10 +64,50 @@ type Agent struct {
 	sessionService session.Service
 }
 
+// createFlashModel creates a new Flash model with a rotating API key
+func (a *Agent) createFlashModel(ctx context.Context) (model.LLM, error) {
+	return gemini.NewModel(ctx, a.cfg.Bot.FlashModel, &genai.ClientConfig{
+		APIKey:  getNextAPIKey(a.cfg.GeminiAPIKeys),
+		Backend: genai.BackendGeminiAPI,
+	})
+}
+
+// createProModel creates a new Pro model with a rotating API key
+func (a *Agent) createProModel(ctx context.Context) (model.LLM, error) {
+	return gemini.NewModel(ctx, a.cfg.Bot.ProModel, &genai.ClientConfig{
+		APIKey:  getNextAPIKey(a.cfg.GeminiAPIKeys),
+		Backend: genai.BackendGeminiAPI,
+	})
+}
+
+// rotateModels recreates the LLM models with new API keys (call on rate limit errors)
+func (a *Agent) rotateModels(ctx context.Context) error {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+
+	slog.Info("Rotating API keys due to rate limit")
+
+	flashLLM, err := a.createFlashModel(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to rotate flash model: %w", err)
+	}
+	a.flashLLM = flashLLM
+
+	proLLM, err := a.createProModel(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to rotate pro model: %w", err)
+	}
+	a.proLLM = proLLM
+
+	return nil
+}
+
 func NewAgent(ctx context.Context, cfg *config.Config, database *raven.DB) (*Agent, error) {
-	// 1. Initialize ADK Models (Flash & Pro)
+	slog.Info("Initializing agent with API key rotation", "num_keys", len(cfg.GeminiAPIKeys))
+
+	// 1. Initialize ADK Models (Flash & Pro) with rotating API keys
 	flashLLM, err := gemini.NewModel(ctx, cfg.Bot.FlashModel, &genai.ClientConfig{
-		APIKey:  cfg.GeminiAPIKeys[rand.Intn(len(cfg.GeminiAPIKeys))],
+		APIKey:  getNextAPIKey(cfg.GeminiAPIKeys),
 		Backend: genai.BackendGeminiAPI,
 	})
 	if err != nil {
@@ -60,7 +115,7 @@ func NewAgent(ctx context.Context, cfg *config.Config, database *raven.DB) (*Age
 	}
 
 	proLLM, err := gemini.NewModel(ctx, cfg.Bot.ProModel, &genai.ClientConfig{
-		APIKey:  cfg.GeminiAPIKeys[rand.Intn(len(cfg.GeminiAPIKeys))],
+		APIKey:  getNextAPIKey(cfg.GeminiAPIKeys),
 		Backend: genai.BackendGeminiAPI,
 	})
 	if err != nil {
@@ -110,7 +165,9 @@ func NewAgent(ctx context.Context, cfg *config.Config, database *raven.DB) (*Age
 
 	// 4. Initialize Session Service (SQLite Persistent)
 	dbPath := "data/ravenbot.db"
-	gormDB, err := gorm.Open(sqlite.Open(dbPath), &gorm.Config{})
+	gormDB, err := gorm.Open(sqlite.Open(dbPath), &gorm.Config{
+		Logger: logger.Default.LogMode(logger.Silent),
+	})
 	if err != nil {
 		return nil, fmt.Errorf("failed to open gorm db for sessions: %w", err)
 	}
@@ -372,37 +429,80 @@ func (a *Agent) ClearSession(sessionID string) {
 }
 
 // classifyPrompt determines if the prompt is 'Simple' or 'Complex' using the Flash model.
+// Biased towards "Simple" to favor Flash model usage for cost efficiency.
+// Includes retry logic with API key rotation on rate limit errors.
 func (a *Agent) classifyPrompt(ctx context.Context, message string) string {
-	prompt := fmt.Sprintf(`You are a request classifier.
-Analyze the following user input and determine if it is "Simple" (conversational, greetings, simple questions, short acknowledgments) or "Complex" (requires reasoning, coding, tool use, multi-step logic, technical questions).
+	prompt := fmt.Sprintf(`You are a request classifier. Default to "Simple" unless clearly complex.
+
+Classify as "Simple" (use Flash model):
+- Conversational messages, greetings, small talk
+- Simple questions with straightforward answers
+- Factual lookups, definitions, explanations
+- Short acknowledgments or follow-ups
+- General knowledge questions
+- Most everyday requests
+
+Classify as "Complex" (use Pro model) ONLY for:
+- Multi-step mathematical proofs or calculations
+- Complex code debugging requiring deep analysis
+- Tasks explicitly requiring multiple tool calls in sequence
+- Advanced reasoning puzzles or logic problems
 
 User Input: "%s"
 
-Respond with ONLY the word "Simple" or "Complex".`, message)
+Respond with ONLY "Simple" or "Complex". When in doubt, respond "Simple".`, message)
 
-	respIter := a.flashLLM.GenerateContent(ctx, &model.LLMRequest{
-		Contents: []*genai.Content{{
-			Role:  "user",
-			Parts: []*genai.Part{{Text: prompt}},
-		}},
-	}, false)
+	maxRetries := len(a.cfg.GeminiAPIKeys)
+	if maxRetries < 1 {
+		maxRetries = 1
+	}
 
-	var result string
-	for resp, err := range respIter {
-		if err != nil {
-			slog.Warn("Classification failed, defaulting to Pro", "error", err)
+	for attempt := 0; attempt < maxRetries; attempt++ {
+		a.mu.RLock()
+		llm := a.flashLLM
+		a.mu.RUnlock()
+
+		respIter := llm.GenerateContent(ctx, &model.LLMRequest{
+			Contents: []*genai.Content{{
+				Role:  "user",
+				Parts: []*genai.Part{{Text: prompt}},
+			}},
+		}, false)
+
+		var result string
+		var rateLimited bool
+		for resp, err := range respIter {
+			if err != nil {
+				if strings.Contains(err.Error(), "429") || strings.Contains(err.Error(), "RESOURCE_EXHAUSTED") {
+					rateLimited = true
+					slog.Warn("Rate limited during classification, rotating key", "attempt", attempt+1, "error", err)
+					break
+				}
+				slog.Warn("Classification failed, defaulting to Flash", "error", err)
+				return "Simple" // Default to Flash on errors
+			}
+			if resp.Content != nil && len(resp.Content.Parts) > 0 {
+				result += resp.Content.Parts[0].Text
+			}
+		}
+
+		if rateLimited {
+			// Rotate to a new API key and retry
+			if err := a.rotateModels(ctx); err != nil {
+				slog.Error("Failed to rotate models", "error", err)
+			}
+			continue
+		}
+
+		result = strings.TrimSpace(result)
+		if strings.EqualFold(result, "Complex") {
 			return "Complex"
 		}
-		if resp.Content != nil && len(resp.Content.Parts) > 0 {
-			result += resp.Content.Parts[0].Text
-		}
+		return "Simple" // Default to Simple/Flash
 	}
 
-	result = strings.TrimSpace(result)
-	if strings.EqualFold(result, "Simple") {
-		return "Simple"
-	}
-	return "Complex"
+	slog.Warn("All API keys exhausted during classification, defaulting to Flash")
+	return "Simple" // Default to Flash when all keys exhausted
 }
 
 // Chat handles conversational messages with session persistence and dynamic model routing.
@@ -522,6 +622,14 @@ func (a *Agent) consumeRunnerEvents(sessionID string, events iter.Seq2[*session.
 				a.ClearSession(sessionID)
 				// We return a user-friendly error suggesting a retry
 				return "", fmt.Errorf("encountered a technical glitch in conversation turn order; session reset, please try again")
+			}
+			// Check for rate limit errors and trigger key rotation
+			if strings.Contains(msg, "429") || strings.Contains(msg, "RESOURCE_EXHAUSTED") {
+				slog.Warn("Rate limit detected, rotating API keys", "sessionID", sessionID)
+				if rotateErr := a.rotateModels(context.Background()); rotateErr != nil {
+					slog.Error("Failed to rotate models after rate limit", "error", rotateErr)
+				}
+				return "", fmt.Errorf("rate limited by API, please try again in a moment")
 			}
 			return "", fmt.Errorf("ADK runner error: %w", err)
 		}
