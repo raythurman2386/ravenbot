@@ -48,7 +48,7 @@ This transition to the Google ADK provides improved reliability, streamlined too
 
 ### 1. Prerequisites
 - Docker & Docker Compose
-- Google Gemini API Key
+- Google Gemini API Key (Support for multiple keys: `key1,key2,key3` for automatic rotation on rate limits)
 - (Optional) Telegram Bot Token & Chat ID
 - (Optional) Discord Bot Token & Channel ID
 - (Optional) Jules Agent API Key

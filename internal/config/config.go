@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
+	"strings"
 )
 
 type MCPServerConfig struct {
@@ -32,7 +33,7 @@ type BotConfig struct {
 }
 
 type Config struct {
-	GeminiAPIKey     string
+	GeminiAPIKeys    []string
 	TelegramBotToken string
 	TelegramChatID   int64
 	DiscordBotToken  string
@@ -50,8 +51,13 @@ func LoadConfig() (*Config, error) {
 		return nil, fmt.Errorf("GEMINI_API_KEY environment variable is not set")
 	}
 
+	apiKeys := strings.Split(apiKey, ",")
+	for i := range apiKeys {
+		apiKeys[i] = strings.TrimSpace(apiKeys[i])
+	}
+
 	cfg := &Config{
-		GeminiAPIKey:     apiKey,
+		GeminiAPIKeys:    apiKeys,
 		TelegramBotToken: os.Getenv("TELEGRAM_BOT_TOKEN"),
 		DiscordBotToken:  os.Getenv("DISCORD_BOT_TOKEN"),
 		DiscordChannelID: os.Getenv("DISCORD_CHANNEL_ID"),

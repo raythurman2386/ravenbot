@@ -16,7 +16,6 @@ import (
 	"google.golang.org/adk/agent"
 	"google.golang.org/adk/agent/llmagent"
 	"google.golang.org/adk/model"
-	"google.golang.org/adk/model/gemini"
 	"google.golang.org/adk/runner"
 	"google.golang.org/adk/session"
 	"google.golang.org/adk/tool"
@@ -47,21 +46,18 @@ type Agent struct {
 }
 
 func NewAgent(ctx context.Context, cfg *config.Config, database *db.DB) (*Agent, error) {
-	// 1. Initialize ADK Models (Flash & Pro)
-	flashLLM, err := gemini.NewModel(ctx, cfg.Bot.FlashModel, &genai.ClientConfig{
-		APIKey:  cfg.GeminiAPIKey,
-		Backend: genai.BackendGeminiAPI,
-	})
+	// Initialize Key Manager
+	km := NewKeyManager(cfg.GeminiAPIKeys)
+
+	// 1. Initialize ADK Models (Flash & Pro) using Rotating Wrapper
+	flashLLM, err := NewRotatingLLM(ctx, km, cfg.Bot.FlashModel, genai.BackendGeminiAPI)
 	if err != nil {
-		return nil, fmt.Errorf("failed to create ADK Gemini Flash model: %w", err)
+		return nil, fmt.Errorf("failed to create rotating ADK Gemini Flash model: %w", err)
 	}
 
-	proLLM, err := gemini.NewModel(ctx, cfg.Bot.ProModel, &genai.ClientConfig{
-		APIKey:  cfg.GeminiAPIKey,
-		Backend: genai.BackendGeminiAPI,
-	})
+	proLLM, err := NewRotatingLLM(ctx, km, cfg.Bot.ProModel, genai.BackendGeminiAPI)
 	if err != nil {
-		return nil, fmt.Errorf("failed to create ADK Gemini Pro model: %w", err)
+		return nil, fmt.Errorf("failed to create rotating ADK Gemini Pro model: %w", err)
 	}
 
 	a := &Agent{
@@ -99,8 +95,8 @@ func NewAgent(ctx context.Context, cfg *config.Config, database *db.DB) (*Agent,
 		a.mu.Unlock()
 	}
 
-	// 4. Initialize Session Service
-	sessionService := session.InMemoryService()
+	// 4. Initialize Persistent Session Service
+	sessionService := db.NewSQLiteSessionService(database)
 	a.sessionService = sessionService
 
 	// 5. Gather Tools and Create Sub-Agents
@@ -114,11 +110,11 @@ func NewAgent(ctx context.Context, cfg *config.Config, database *db.DB) (*Agent,
 
 	for _, t := range mcpTools {
 		// Memory tools stay in the root agent for personalization
-		if strings.HasPrefix(t.Name(), "memory_") {
-			rootMCPTools = append(rootMCPTools, t)
-		} else {
-			researchMCPTools = append(researchMCPTools, t)
-		}
+		// if strings.HasPrefix(t.Name(), "memory_") {
+		// 	rootMCPTools = append(rootMCPTools, t)
+		// } else {
+		researchMCPTools = append(researchMCPTools, t)
+		// }
 	}
 
 	// Create Research Assistant Sub-Agent (Uses Pro Model)
