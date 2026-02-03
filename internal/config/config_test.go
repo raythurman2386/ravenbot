@@ -14,7 +14,7 @@ func TestLoadConfig(t *testing.T) {
 
 		cfg, err := LoadConfig()
 		assert.NoError(t, err)
-		assert.Equal(t, "test-key", cfg.GeminiAPIKeys[0])
+		assert.Equal(t, "test-key", cfg.GeminiAPIKey)
 	})
 
 	t.Run("missing key", func(t *testing.T) {
