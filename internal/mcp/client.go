@@ -32,6 +32,9 @@ type Client struct {
 
 	serverInfo   *ServerInfo
 	capabilities map[string]any
+
+	notificationHandlers map[string]func(Notification)
+	notificationMu       sync.RWMutex
 }
 
 // StdioTransport implements Transport using stdin/stdout
@@ -200,6 +203,16 @@ func (t *SSETransport) ReadLoop(handler func(line []byte)) {
 	}
 }
 
+// OnNotification registers a handler for a specific notification method
+func (c *Client) OnNotification(method string, handler func(Notification)) {
+	c.notificationMu.Lock()
+	defer c.notificationMu.Unlock()
+	if c.notificationHandlers == nil {
+		c.notificationHandlers = make(map[string]func(Notification))
+	}
+	c.notificationHandlers[method] = handler
+}
+
 // Start starts the server transport and begins listening for messages
 func (c *Client) Start() error {
 	if err := c.transport.Start(); err != nil {
@@ -226,7 +239,26 @@ func (c *Client) handleMessage(line []byte) {
 		c.pendingMu.Unlock()
 		return
 	}
-	// TODO: Handle notifications
+
+	// Handle notifications
+	var notif Notification
+	if err := json.Unmarshal(line, &notif); err == nil && notif.Method != "" {
+		c.notificationMu.RLock()
+		var handler func(Notification)
+		if c.notificationHandlers != nil {
+			handler = c.notificationHandlers[notif.Method]
+		}
+		c.notificationMu.RUnlock()
+
+		if handler != nil {
+			go handler(notif)
+		} else {
+			slog.Debug("Received unhandled notification", "method", notif.Method)
+		}
+		return
+	}
+
+	slog.Warn("Received unknown message format", "msg", string(line))
 }
 
 // Close terminates the connection
