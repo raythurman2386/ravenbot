@@ -20,7 +20,8 @@ type JobConfig struct {
 }
 
 type BotConfig struct {
-	Model                string  `json:"model"`
+	FlashModel           string  `json:"flashModel"`
+	ProModel             string  `json:"proModel"`
 	SystemPrompt         string  `json:"systemPrompt"`
 	ResearchSystemPrompt string  `json:"researchSystemPrompt"`
 	TokenLimit           int64   `json:"tokenLimit"`

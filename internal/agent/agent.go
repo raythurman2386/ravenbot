@@ -37,20 +37,31 @@ type Agent struct {
 	summariesMu sync.RWMutex
 
 	// ADK components
-	adkLLM         model.LLM
-	adkAgent       agent.Agent
-	adkRunner      *runner.Runner
+	flashLLM model.LLM
+	proLLM   model.LLM
+
+	flashRunner *runner.Runner
+	proRunner   *runner.Runner
+
 	sessionService session.Service
 }
 
 func NewAgent(ctx context.Context, cfg *config.Config, database *db.DB) (*Agent, error) {
-	// 1. Initialize ADK Model (LLM)
-	adkLLM, err := gemini.NewModel(ctx, cfg.Bot.Model, &genai.ClientConfig{
+	// 1. Initialize ADK Models (Flash & Pro)
+	flashLLM, err := gemini.NewModel(ctx, cfg.Bot.FlashModel, &genai.ClientConfig{
 		APIKey:  cfg.GeminiAPIKey,
 		Backend: genai.BackendGeminiAPI,
 	})
 	if err != nil {
-		return nil, fmt.Errorf("failed to create ADK Gemini model: %w", err)
+		return nil, fmt.Errorf("failed to create ADK Gemini Flash model: %w", err)
+	}
+
+	proLLM, err := gemini.NewModel(ctx, cfg.Bot.ProModel, &genai.ClientConfig{
+		APIKey:  cfg.GeminiAPIKey,
+		Backend: genai.BackendGeminiAPI,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("failed to create ADK Gemini Pro model: %w", err)
 	}
 
 	a := &Agent{
@@ -58,7 +69,8 @@ func NewAgent(ctx context.Context, cfg *config.Config, database *db.DB) (*Agent,
 		db:         database,
 		mcpClients: make(map[string]*mcp.Client),
 		summaries:  make(map[string]string),
-		adkLLM:     adkLLM,
+		flashLLM:   flashLLM,
+		proLLM:     proLLM,
 	}
 
 	// 3. Initialize MCP Servers
@@ -89,6 +101,7 @@ func NewAgent(ctx context.Context, cfg *config.Config, database *db.DB) (*Agent,
 
 	// 4. Initialize Session Service
 	sessionService := session.InMemoryService()
+	a.sessionService = sessionService
 
 	// 5. Gather Tools and Create Sub-Agents
 	technicalTools := a.GetTechnicalTools()
@@ -108,10 +121,10 @@ func NewAgent(ctx context.Context, cfg *config.Config, database *db.DB) (*Agent,
 		}
 	}
 
-	// Create Research Assistant Sub-Agent
+	// Create Research Assistant Sub-Agent (Uses Pro Model)
 	researchAssistant, err := llmagent.New(llmagent.Config{
 		Name:        "ResearchAssistant",
-		Model:       adkLLM,
+		Model:       proLLM,
 		Description: "A specialized assistant for technical research, web search, system diagnostics, GitHub, and repository management.",
 		Instruction: cfg.Bot.ResearchSystemPrompt,
 		Tools:       append(technicalTools, researchMCPTools...),
@@ -120,7 +133,7 @@ func NewAgent(ctx context.Context, cfg *config.Config, database *db.DB) (*Agent,
 		return nil, fmt.Errorf("failed to create ResearchAssistant: %w", err)
 	}
 
-	// Wrap Research Assistant as a Tool with a custom implementation to fix streaming output loss in ADK's agenttool
+	// Wrap Research Assistant as a Tool
 	type ResearchAssistantArgs struct {
 		Request string `json:"request" jsonschema:"The technical research or diagnostic request."`
 	}
@@ -192,57 +205,81 @@ func NewAgent(ctx context.Context, cfg *config.Config, database *db.DB) (*Agent,
 	allRootTools := append(coreTools, rootMCPTools...)
 	allRootTools = append(allRootTools, researchTool)
 
-	// 5. Create Root ADK LLMAgent
-	adkAgent, err := llmagent.New(llmagent.Config{
-		Name:        "ravenbot",
-		Model:       adkLLM,
-		Description: "RavenBot autonomous conversation agent",
-		InstructionProvider: func(ctx agent.ReadonlyContext) (string, error) {
-			a.summariesMu.RLock()
-			summary := a.summaries[ctx.SessionID()]
-			a.summariesMu.RUnlock()
+	// Instruction provider logic
+	instructionProvider := func(ctx agent.ReadonlyContext) (string, error) {
+		a.summariesMu.RLock()
+		summary := a.summaries[ctx.SessionID()]
+		a.summariesMu.RUnlock()
 
-			if summary != "" {
-				return fmt.Sprintf("%s\n\n### CONTEXT SUMMARY OF PREVIOUS CONVERSATION:\n%s", a.cfg.Bot.SystemPrompt, summary), nil
-			}
-			return a.cfg.Bot.SystemPrompt, nil
-		},
-		Tools: allRootTools,
-		AfterModelCallbacks: []llmagent.AfterModelCallback{
-			func(ctx agent.CallbackContext, llmResponse *model.LLMResponse, llmResponseError error) (*model.LLMResponse, error) {
-				if llmResponseError != nil || llmResponse == nil || llmResponse.UsageMetadata == nil {
-					return llmResponse, llmResponseError
-				}
+		if summary != "" {
+			return fmt.Sprintf("%s\n\n### CONTEXT SUMMARY OF PREVIOUS CONVERSATION:\n%s", a.cfg.Bot.SystemPrompt, summary), nil
+		}
+		return a.cfg.Bot.SystemPrompt, nil
+	}
 
-				// Check if context needs compression
-				totalTokens := llmResponse.UsageMetadata.TotalTokenCount
-				threshold := float64(a.cfg.Bot.TokenLimit) * a.cfg.Bot.TokenThreshold
+	// Callback for context compression
+	afterModelCallback := func(ctx agent.CallbackContext, llmResponse *model.LLMResponse, llmResponseError error) (*model.LLMResponse, error) {
+		if llmResponseError != nil || llmResponse == nil || llmResponse.UsageMetadata == nil {
+			return llmResponse, llmResponseError
+		}
 
-				if float64(totalTokens) >= threshold {
-					slog.Info("Context window threshold reached, triggering compression", "sessionID", ctx.SessionID(), "tokens", totalTokens)
-					go a.compressContext(ctx.SessionID())
-				}
+		// Check if context needs compression
+		totalTokens := llmResponse.UsageMetadata.TotalTokenCount
+		threshold := float64(a.cfg.Bot.TokenLimit) * a.cfg.Bot.TokenThreshold
 
-				return llmResponse, nil
-			},
-		},
+		if float64(totalTokens) >= threshold {
+			slog.Info("Context window threshold reached, triggering compression", "sessionID", ctx.SessionID(), "tokens", totalTokens)
+			go a.compressContext(ctx.SessionID())
+		}
+
+		return llmResponse, nil
+	}
+
+	// 5. Create Root ADK LLMAgents (One for Flash, one for Pro)
+	flashAgent, err := llmagent.New(llmagent.Config{
+		Name:                "ravenbot-flash",
+		Model:               flashLLM,
+		Description:         "RavenBot Flash Agent",
+		InstructionProvider: instructionProvider,
+		Tools:               allRootTools,
+		AfterModelCallbacks: []llmagent.AfterModelCallback{afterModelCallback},
 	})
 	if err != nil {
-		return nil, fmt.Errorf("failed to create root ADK agent: %w", err)
+		return nil, fmt.Errorf("failed to create flash agent: %w", err)
 	}
-	a.adkAgent = adkAgent
 
-	// 7. Create ADK Runner
-	adkRunner, err := runner.New(runner.Config{
+	proAgent, err := llmagent.New(llmagent.Config{
+		Name:                "ravenbot-pro",
+		Model:               proLLM,
+		Description:         "RavenBot Pro Agent",
+		InstructionProvider: instructionProvider,
+		Tools:               allRootTools,
+		AfterModelCallbacks: []llmagent.AfterModelCallback{afterModelCallback},
+	})
+	if err != nil {
+		return nil, fmt.Errorf("failed to create pro agent: %w", err)
+	}
+
+	// 6. Create ADK Runners
+	flashRunner, err := runner.New(runner.Config{
 		AppName:        AppName,
-		Agent:          adkAgent,
+		Agent:          flashAgent,
 		SessionService: sessionService,
 	})
 	if err != nil {
-		return nil, fmt.Errorf("failed to create ADK runner: %w", err)
+		return nil, fmt.Errorf("failed to create Flash runner: %w", err)
 	}
-	a.adkRunner = adkRunner
-	a.sessionService = sessionService
+	a.flashRunner = flashRunner
+
+	proRunner, err := runner.New(runner.Config{
+		AppName:        AppName,
+		Agent:          proAgent,
+		SessionService: sessionService,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("failed to create Pro runner: %w", err)
+	}
+	a.proRunner = proRunner
 
 	return a, nil
 }
@@ -279,7 +316,41 @@ func (a *Agent) ClearSession(sessionID string) {
 	}
 }
 
-// Chat handles conversational messages with session persistence
+// classifyPrompt determines if the prompt is 'Simple' or 'Complex' using the Flash model.
+func (a *Agent) classifyPrompt(ctx context.Context, message string) string {
+	prompt := fmt.Sprintf(`You are a request classifier.
+Analyze the following user input and determine if it is "Simple" (conversational, greetings, simple questions, short acknowledgments) or "Complex" (requires reasoning, coding, tool use, multi-step logic, technical questions).
+
+User Input: "%s"
+
+Respond with ONLY the word "Simple" or "Complex".`, message)
+
+	respIter := a.flashLLM.GenerateContent(ctx, &model.LLMRequest{
+		Contents: []*genai.Content{{
+			Role:  "user",
+			Parts: []*genai.Part{{Text: prompt}},
+		}},
+	}, false)
+
+	var result string
+	for resp, err := range respIter {
+		if err != nil {
+			slog.Warn("Classification failed, defaulting to Pro", "error", err)
+			return "Complex"
+		}
+		if resp.Content != nil && len(resp.Content.Parts) > 0 {
+			result += resp.Content.Parts[0].Text
+		}
+	}
+
+	result = strings.TrimSpace(result)
+	if strings.EqualFold(result, "Simple") {
+		return "Simple"
+	}
+	return "Complex"
+}
+
+// Chat handles conversational messages with session persistence and dynamic model routing.
 func (a *Agent) Chat(ctx context.Context, sessionID, message string) (string, error) {
 	slog.Info("Agent.Chat called", "sessionID", sessionID, "messageLength", len(message))
 
@@ -303,7 +374,23 @@ func (a *Agent) Chat(ctx context.Context, sessionID, message string) (string, er
 		}
 	}
 
-	events := a.adkRunner.Run(ctx, userID, sessionID, &genai.Content{
+	// 1. Router Logic: Classify the prompt
+	classification := a.classifyPrompt(ctx, message)
+	var activeRunner *runner.Runner
+	var modelName string
+
+	if classification == "Simple" {
+		activeRunner = a.flashRunner
+		modelName = a.cfg.Bot.FlashModel
+	} else {
+		activeRunner = a.proRunner
+		modelName = a.cfg.Bot.ProModel
+	}
+
+	slog.Info("Routed request", "classification", classification, "model", modelName)
+
+	// 2. Run with selected model
+	events := activeRunner.Run(ctx, userID, sessionID, &genai.Content{
 		Role:  "user",
 		Parts: []*genai.Part{{Text: message}},
 	}, agent.RunConfig{})
@@ -311,13 +398,14 @@ func (a *Agent) Chat(ctx context.Context, sessionID, message string) (string, er
 	return a.consumeRunnerEvents(sessionID, events)
 }
 
-// RunMission executes a one-shot research mission (no session persistence)
+// RunMission executes a one-shot research mission (no session persistence).
+// Missions always default to the Pro model for deep research.
 func (a *Agent) RunMission(ctx context.Context, prompt string) (string, error) {
 	missionID := fmt.Sprintf("mission-%d", time.Now().UnixNano())
 
 	missionAgent, err := llmagent.New(llmagent.Config{
 		Name:        "ravenbot-mission",
-		Model:       a.adkLLM,
+		Model:       a.proLLM, // Use Pro model for missions
 		Description: "RavenBot research mission agent",
 		Instruction: a.cfg.Bot.ResearchSystemPrompt,
 		Tools:       a.GetTechnicalTools(),
