@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"iter"
 	"log/slog"
-	"math/rand"
+	"net/http"
 	"strings"
 	"sync"
 	"time"
@@ -51,18 +51,31 @@ type Agent struct {
 }
 
 func NewAgent(ctx context.Context, cfg *config.Config, database *db.DB) (*Agent, error) {
-	// 1. Initialize ADK Models (Flash & Pro)
+	// 1. Initialize Custom Transport for Key Rotation
+	// This transport will handle rotating keys on 429 errors.
+	transport := NewKeyRotatingTransport(cfg.GeminiAPIKeys)
+	httpClient := &http.Client{
+		Transport: transport,
+		Timeout:   60 * time.Second, // Set a reasonable timeout
+	}
+
+	// 2. Initialize ADK Models (Flash & Pro)
+	// We pass the first key as a placeholder; the transport will override it.
+	initialKey := cfg.GeminiAPIKeys[0]
+
 	flashLLM, err := gemini.NewModel(ctx, cfg.Bot.FlashModel, &genai.ClientConfig{
-		APIKey:  cfg.GeminiAPIKeys[rand.Intn(len(cfg.GeminiAPIKeys))],
-		Backend: genai.BackendGeminiAPI,
+		APIKey:     initialKey,
+		HTTPClient: httpClient,
+		Backend:    genai.BackendGeminiAPI,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("failed to create ADK Gemini Flash model: %w", err)
 	}
 
 	proLLM, err := gemini.NewModel(ctx, cfg.Bot.ProModel, &genai.ClientConfig{
-		APIKey:  cfg.GeminiAPIKeys[rand.Intn(len(cfg.GeminiAPIKeys))],
-		Backend: genai.BackendGeminiAPI,
+		APIKey:     initialKey,
+		HTTPClient: httpClient,
+		Backend:    genai.BackendGeminiAPI,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("failed to create ADK Gemini Pro model: %w", err)

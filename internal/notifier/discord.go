@@ -11,30 +11,20 @@ import (
 )
 
 type DiscordNotifier struct {
-	sessions  []*discordgo.Session
+	session   *discordgo.Session
 	channelID string
 }
 
-func NewDiscordNotifier(tokens []string, channelID string) (*DiscordNotifier, error) {
-	var sessions []*discordgo.Session
-
-	for _, token := range tokens {
-		dg, err := discordgo.New("Bot " + token)
-		if err != nil {
-			slog.Warn("Failed to initialize discord session for a token", "error", err)
-			continue
-		}
-
-		// Set intents to receive messages and message content
-		dg.Identify.Intents = discordgo.IntentsGuildMessages | discordgo.IntentsDirectMessages | discordgo.IntentsMessageContent
-		sessions = append(sessions, dg)
+func NewDiscordNotifier(token string, channelID string) (*DiscordNotifier, error) {
+	dg, err := discordgo.New("Bot " + token)
+	if err != nil {
+		return nil, fmt.Errorf("failed to initialize discord session: %w", err)
 	}
 
-	if len(sessions) == 0 {
-		return nil, fmt.Errorf("failed to initialize any discord sessions")
-	}
+	// Set intents to receive messages and message content
+	dg.Identify.Intents = discordgo.IntentsGuildMessages | discordgo.IntentsDirectMessages | discordgo.IntentsMessageContent
 
-	return &DiscordNotifier{sessions: sessions, channelID: channelID}, nil
+	return &DiscordNotifier{session: dg, channelID: channelID}, nil
 }
 
 func (d *DiscordNotifier) Send(ctx context.Context, message string) error {
@@ -42,25 +32,13 @@ func (d *DiscordNotifier) Send(ctx context.Context, message string) error {
 	const limit = 1900
 
 	chunks := splitMessage(message, limit)
-
-	var lastErr error
-	for _, session := range d.sessions {
-		success := true
-		for i, chunk := range chunks {
-			if _, err := session.ChannelMessageSend(d.channelID, chunk); err != nil {
-				slog.Warn("Failed to send discord message chunk, trying next key", "chunk", i+1, "error", err)
-				lastErr = err
-				success = false
-				break
-			}
-		}
-
-		if success {
-			return nil
+	for i, chunk := range chunks {
+		if _, err := d.session.ChannelMessageSend(d.channelID, chunk); err != nil {
+			return fmt.Errorf("failed to send discord message chunk %d/%d to channel %s: %w", i+1, len(chunks), d.channelID, err)
 		}
 	}
 
-	return fmt.Errorf("failed to send discord message with any available key: %w", lastErr)
+	return nil
 }
 
 func (d *DiscordNotifier) Name() string {
@@ -74,17 +52,15 @@ func (d *DiscordNotifier) StartTyping(ctx context.Context) func() {
 		ticker := time.NewTicker(5 * time.Second)
 		defer ticker.Stop()
 
-		session := d.sessions[0]
-
 		// Send initial typing indicator
-		if err := session.ChannelTyping(d.channelID); err != nil {
+		if err := d.session.ChannelTyping(d.channelID); err != nil {
 			slog.Error("Failed to send initial discord typing indicator", "error", err)
 		}
 
 		for {
 			select {
 			case <-ticker.C:
-				if err := session.ChannelTyping(d.channelID); err != nil {
+				if err := d.session.ChannelTyping(d.channelID); err != nil {
 					slog.Error("Failed to send discord typing indicator", "error", err)
 				}
 			case <-childCtx.Done():
@@ -97,8 +73,7 @@ func (d *DiscordNotifier) StartTyping(ctx context.Context) func() {
 
 // StartListener begins listening for messages on Discord.
 func (d *DiscordNotifier) StartListener(ctx context.Context, handler func(channelID string, text string)) {
-	session := d.sessions[0]
-	session.AddHandler(func(s *discordgo.Session, m *discordgo.MessageCreate) {
+	d.session.AddHandler(func(s *discordgo.Session, m *discordgo.MessageCreate) {
 		// Ignore all messages created by the bot itself
 		if m.Author.ID == s.State.User.ID {
 			return
@@ -122,11 +97,11 @@ func (d *DiscordNotifier) StartListener(ctx context.Context, handler func(channe
 		}
 	})
 
-	if err := session.Open(); err != nil {
+	if err := d.session.Open(); err != nil {
 		slog.Error("Failed to open discord session", "error", err)
 		return
 	}
 
 	<-ctx.Done()
-	session.Close()
+	d.session.Close()
 }
