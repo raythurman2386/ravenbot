@@ -15,6 +15,7 @@ import (
 	"github.com/raythurman2386/ravenbot/internal/mcp"
 	"github.com/raythurman2386/ravenbot/internal/tools"
 
+	"github.com/glebarez/sqlite"
 	"google.golang.org/adk/agent"
 	"google.golang.org/adk/agent/llmagent"
 	"google.golang.org/adk/model"
@@ -25,7 +26,6 @@ import (
 	"google.golang.org/adk/tool"
 	"google.golang.org/adk/tool/functiontool"
 	"google.golang.org/genai"
-	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
 )
 
