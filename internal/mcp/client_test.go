@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"testing"
+	"time"
 )
 
 // Helper to run the mock server if env var is set
@@ -22,6 +23,11 @@ func runMockServer() {
 		line := scanner.Bytes()
 		var req Request
 		if err := json.Unmarshal(line, &req); err != nil {
+			continue
+		}
+
+		// Don't respond to notifications (ID=0)
+		if req.ID == 0 {
 			continue
 		}
 
@@ -52,6 +58,15 @@ func runMockServer() {
 					{Type: "text", Text: "echo result"},
 				},
 			}
+		case "debug/sendNotification":
+			notif := Notification{
+				JSONRPC: "2.0",
+				Method:  "test/notification",
+				Params:  json.RawMessage(`{"message": "hello"}`),
+			}
+			out, _ := json.Marshal(notif)
+			fmt.Println(string(out))
+			result = map[string]string{"status": "sent"}
 		}
 
 		resp := Response{
@@ -113,5 +128,48 @@ func TestStdioClient(t *testing.T) {
 
 	if len(res.Content) == 0 || res.Content[0].Text != "echo result" {
 		t.Errorf("Unexpected result: %v", res)
+	}
+}
+
+func TestClientNotification(t *testing.T) {
+	// Re-exec this test binary as the server
+	exe, err := os.Executable()
+	if err != nil {
+		t.Fatalf("Failed to get executable: %v", err)
+	}
+
+	client := NewStdioClient(exe, []string{})
+	// Set the env var for the subprocess
+	client.transport.(*StdioTransport).cmd.Env = append(os.Environ(), "GO_TEST_MCP_SERVER=1")
+
+	if err := client.Start(); err != nil {
+		t.Fatalf("Failed to start client: %v", err)
+	}
+	defer client.Close()
+
+	if err := client.Initialize(); err != nil {
+		t.Fatalf("Initialize failed: %v", err)
+	}
+
+	// Setup notification handler
+	received := make(chan Notification, 1)
+	client.OnNotification("test/notification", func(n Notification) {
+		received <- n
+	})
+
+	// Trigger notification
+	_, err = client.SendRequest("debug/sendNotification", nil)
+	if err != nil {
+		t.Fatalf("Failed to trigger notification: %v", err)
+	}
+
+	// Wait for notification
+	select {
+	case n := <-received:
+		if n.Method != "test/notification" {
+			t.Errorf("Unexpected method: %s", n.Method)
+		}
+	case <-time.After(1 * time.Second):
+		t.Fatal("Timeout waiting for notification")
 	}
 }
