@@ -103,6 +103,36 @@ func TestShellExecutor_Execute_Sanitization(t *testing.T) {
 			args:    []string{"{ls}"},
 			wantErr: true,
 		},
+		{
+			name:    "Backtick injection",
+			args:    []string{"`ls`"},
+			wantErr: true,
+		},
+		{
+			name:    "Newline injection",
+			args:    []string{"arg1\narg2"},
+			wantErr: true,
+		},
+		{
+			name:    "Backslash injection",
+			args:    []string{"\\"},
+			wantErr: true,
+		},
+		{
+			name:    "Double quote injection",
+			args:    []string{"\""},
+			wantErr: true,
+		},
+		{
+			name:    "Single quote injection",
+			args:    []string{"'"},
+			wantErr: true,
+		},
+		{
+			name:    "Bracket injection",
+			args:    []string{"["},
+			wantErr: true,
+		},
 	}
 
 	for _, tt := range tests {
