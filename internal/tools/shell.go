@@ -40,9 +40,9 @@ func (s *ShellExecutor) Execute(ctx context.Context, command string, args []stri
 		return "", fmt.Errorf("command '%s' is not allowed", command)
 	}
 
-	// Sanitize args (basic check for shell injection)
+	// Sanitize args (strict check for shell/command injection)
 	for _, arg := range args {
-		if strings.ContainsAny(arg, ";&|><$(){}") {
+		if strings.ContainsAny(arg, ";&|><$(){}[]\"'`\n\r\t\\") {
 			return "", fmt.Errorf("invalid character in argument: %s", arg)
 		}
 	}

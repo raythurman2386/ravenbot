@@ -53,12 +53,12 @@ func (a *Agent) GetTechnicalTools() []tool.Tool {
 	// ShellExecute Tool
 	shellExecutor := tools.NewShellExecutor(a.cfg.AllowedCommands)
 	type ShellExecuteArgs struct {
-		Command string   `json:"command" jsonschema:"The command to run (df, free, uptime, whoami, date, hostname, cat, grep, ls, pwd, ps, top, docker, go, git, curl)."`
+		Command string   `json:"command" jsonschema:"The command to run (df, free, uptime, whoami, date, hostname, uname, ps, top, echo, ping)."`
 		Args    []string `json:"args,omitempty" jsonschema:"The arguments for the command."`
 	}
 	shellExecuteTool, err := functiontool.New(functiontool.Config{
 		Name:        "ShellExecute",
-		Description: "Executes low-level system commands (df, free, uptime, docker ps, etc.). Use this for basic diagnostics. For GitHub or complex Git tasks, ALWAYS prefer specialized MCP tools if available.",
+		Description: "Executes restricted system diagnostic commands (df, free, uptime, ps, etc.). Use this for basic system health checks.",
 	}, func(ctx tool.Context, args ShellExecuteArgs) (string, error) {
 		return shellExecutor.Execute(ctx, args.Command, args.Args)
 	})

@@ -71,22 +71,9 @@
         "date",
         "hostname",
         "uname",
-        "cat",
-        "head",
-        "tail",
-        "wc",
-        "grep",
-        "find",
-        "ls",
-        "pwd",
-        "echo",
-        "env",
         "ps",
         "top",
-        "docker",
-        "go",
-        "git",
-        "curl",
+        "echo",
         "ping"
     ]
 }
