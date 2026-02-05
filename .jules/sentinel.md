@@ -7,3 +7,8 @@
 **Vulnerability:** The `ShellExecute` tool allowed dangerous commands like `env` (leaking secrets) and `docker` (allowing host takeover via `/var/run/docker.sock`). Sanitization was also missing several dangerous characters.
 **Learning:** Whitelisting commands is only half the battle; redundant tools (like `cat` or `ls` when a filesystem MCP exists) should be removed to reduce attack surface. Mapping the docker socket to an agent-controlled container is a critical risk that must be avoided.
 **Prevention:** Use a minimal command whitelist, block all shell-sensitive characters in arguments (including backticks, quotes, and newlines), and never expose the host docker socket to the agent container.
+
+## 2025-02-10 - Consolidating SSRF Protection and Timeout Management
+**Vulnerability:** Multiple tools (`WebSearch`, `MCP SSE Client`) were using default `http.Client` instances, bypassing the SSRF protections implemented in the centralized `NewSafeClient`. Additionally, `NewSafeClient` lacked a default timeout, leading to potential resource exhaustion.
+**Learning:** Enforcing security at the factory level (`NewSafeClient`) is effective, but the factory must be flexible enough to handle different connection lifecycles. Applying a rigid timeout to all clients breaks streaming protocols like SSE.
+**Prevention:** Centralize all HTTP client creation through a secured factory that accepts configuration (like timeouts). Ensure that all outbound network-accessing tools use this factory rather than `http.DefaultClient` or manual `&http.Client{}` instantiation.
