@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"time"
 )
 
 // ValidateURL checks if a URL is safe for fetching by blocking restricted IP ranges.
@@ -18,7 +19,13 @@ func ValidateURL(ctx context.Context, urlStr string) error {
 	if err != nil || (u.Scheme != "http" && u.Scheme != "https") {
 		return fmt.Errorf("invalid URL or scheme")
 	}
-	ips, err := net.DefaultResolver.LookupIP(ctx, "ip", u.Hostname())
+
+	host := u.Hostname()
+	if host == "" {
+		return fmt.Errorf("empty host in URL")
+	}
+
+	ips, err := net.DefaultResolver.LookupIP(ctx, "ip", host)
 	if err != nil {
 		return fmt.Errorf("resolve failed: %w", err)
 	}
@@ -38,9 +45,11 @@ func SafeCheckRedirect(req *http.Request, via []*http.Request) error {
 	return ValidateURL(req.Context(), req.URL.String())
 }
 
-// NewSafeClient returns an http.Client with SSRF protection (redirects and DNS rebinding).
-func NewSafeClient() *http.Client {
+// NewSafeClient returns an http.Client with SSRF protection (redirects and DNS rebinding)
+// and a configurable timeout.
+func NewSafeClient(timeout time.Duration) *http.Client {
 	return &http.Client{
+		Timeout:       timeout,
 		CheckRedirect: SafeCheckRedirect,
 		Transport: &http.Transport{
 			DialContext: func(ctx context.Context, network, addr string) (net.Conn, error) {

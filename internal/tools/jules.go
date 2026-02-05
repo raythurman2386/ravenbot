@@ -73,7 +73,7 @@ func DelegateToJules(ctx context.Context, apiKey, repo, task string) (string, er
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("X-Goog-Api-Key", apiKey)
 
-	client := &http.Client{Timeout: 30 * time.Second}
+	client := NewSafeClient(30 * time.Second)
 	resp, err := client.Do(req)
 	if err != nil {
 		return "", fmt.Errorf("jules api call failed: %w", err)

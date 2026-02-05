@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/PuerkitoBio/goquery"
 )
@@ -20,7 +21,7 @@ func ScrapePage(ctx context.Context, url string) (string, error) {
 	}
 	req.Header.Set("User-Agent", "ravenbot/1.0 (+https://github.com/raythurman2386/ravenbot)")
 
-	client := NewSafeClient()
+	client := NewSafeClient(30 * time.Second)
 	resp, err := client.Do(req)
 	if err != nil {
 		return "", fmt.Errorf("failed to fetch page: %w", err)
