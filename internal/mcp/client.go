@@ -9,6 +9,8 @@ import (
 	"log/slog"
 	"net/http"
 	"os/exec"
+
+	"github.com/raythurman2386/ravenbot/internal/tools"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -116,7 +118,7 @@ type SSETransport struct {
 func NewSSEClient(url string) *Client {
 	t := &SSETransport{
 		url:    url,
-		client: &http.Client{},
+		client: tools.NewSafeClient(0),
 		closer: make(chan struct{}),
 	}
 	return &Client{

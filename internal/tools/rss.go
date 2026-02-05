@@ -3,6 +3,7 @@ package tools
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"github.com/mmcdole/gofeed"
 )
@@ -20,7 +21,7 @@ func FetchRSS(ctx context.Context, url string) ([]RSSItem, error) {
 	}
 
 	fp := gofeed.NewParser()
-	fp.Client = NewSafeClient()
+	fp.Client = NewSafeClient(30 * time.Second)
 	feed, err := fp.ParseURLWithContext(url, ctx)
 	if err != nil {
 		return nil, fmt.Errorf("RSS source at %s returned an error: %w", url, err)

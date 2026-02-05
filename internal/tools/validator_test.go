@@ -18,6 +18,7 @@ func TestValidateURL(t *testing.T) {
 		{"Loopback hostname", "http://localhost", false, true},
 		{"Private IP range", "http://192.168.1.1", false, true},
 		{"Invalid scheme", "ftp://google.com", false, true},
+		{"Empty host", "http:///path", false, true},
 		{"Allow local URLs", "http://127.0.0.1", true, false},
 	}
 
