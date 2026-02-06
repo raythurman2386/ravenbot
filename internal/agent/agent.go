@@ -194,7 +194,7 @@ func NewAgent(ctx context.Context, cfg *config.Config, database *raven.DB) (*Age
 	var rootMCPTools []tool.Tool
 	var researchMCPTools []tool.Tool
 	var systemManagerMCPTools []tool.Tool
-	var julesMCPTools []tool.Tool
+	var githubMCPTools []tool.Tool
 
 	for _, t := range mcpTools {
 		name := t.Name()
@@ -204,7 +204,7 @@ func NewAgent(ctx context.Context, cfg *config.Config, database *raven.DB) (*Age
 		} else if strings.HasPrefix(name, "sysmetrics") {
 			systemManagerMCPTools = append(systemManagerMCPTools, t)
 		} else if strings.HasPrefix(name, "github") {
-			julesMCPTools = append(julesMCPTools, t)
+			githubMCPTools = append(githubMCPTools, t)
 		} else {
 			researchMCPTools = append(researchMCPTools, t)
 		}
@@ -234,13 +234,28 @@ func NewAgent(ctx context.Context, cfg *config.Config, database *raven.DB) (*Age
 		return nil, fmt.Errorf("failed to create SystemManager: %w", err)
 	}
 
+	// Wrap JulesTask as a Tool (External Service) - Available to the Jules Sub-Agent
+	type JulesTaskArgs struct {
+		Repo string `json:"repo" jsonschema:"The repository in 'owner/repo' format."`
+		Task string `json:"task" jsonschema:"The coding task description."`
+	}
+	julesTaskTool, err := functiontool.New(functiontool.Config{
+		Name:        "JulesTask",
+		Description: "Delegates a coding task to the external Jules service.",
+	}, func(ctx tool.Context, args JulesTaskArgs) (string, error) {
+		return tools.DelegateToJules(ctx, cfg.JulesAPIKey, args.Repo, args.Task)
+	})
+	if err != nil {
+		return nil, fmt.Errorf("failed to create JulesTask tool: %w", err)
+	}
+
 	// Create Jules Sub-Agent (Uses Pro Model for coding)
 	julesAgent, err := llmagent.New(llmagent.Config{
 		Name:        "Jules",
 		Model:       proLLM,
 		Description: "A specialized AI software engineer for coding tasks and GitHub operations.",
 		Instruction: cfg.Bot.JulesPrompt,
-		Tools:       julesMCPTools,
+		Tools:       append(githubMCPTools, julesTaskTool),
 	})
 	if err != nil {
 		return nil, fmt.Errorf("failed to create Jules agent: %w", err)
