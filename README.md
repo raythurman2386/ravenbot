@@ -2,7 +2,7 @@
 
 ravenbot is a high-performance, self-hosted autonomous AI agent built in **Go 1.25.6** using the **Google Agent Development Kit (ADK)**. It functions as a proactive technical assistant that researches the latest trends in Golang, AI/LLM, and Geospatial Engineering, delivering high-quality briefings directly to your pocket.
 
-Equipped with a **Gemini 3 Pro** brain and a **Gemini 3 Flash** router, ravenbot can browse the web, execute system commands, and delegate complex repository tasks to the **Gemini Jules Agent**.
+Equipped with a **Gemini 3 Pro** brain and a **Gemini 3 Flash** router, ravenbot can browse the web, execute system commands, and delegate complex tasks to specialized sub-agents.
 
 ---
 
@@ -10,20 +10,24 @@ Equipped with a **Gemini 3 Pro** brain and a **Gemini 3 Flash** router, ravenbot
 
 ### 🧠 Advanced Intelligence
 - **Flash-First Routing**: Uses **Gemini 3 Flash** to intelligently classify prompts as "Simple" or "Complex", routing them to the optimal model to balance speed and reasoning depth.
-- **ResearchAssistant Sub-Agent**: A specialized **Gemini 3 Pro** powered sub-agent dedicated to deep technical research, web search, and system diagnostics.
+- **Specialized Sub-Agents**:
+  - **ResearchAssistant**: A dedicated **Gemini 3 Pro** powered sub-agent for deep technical research, web search, and data aggregation.
+  - **SystemManager**: A specialized agent for system diagnostics and health monitoring using native system metrics.
+  - **Jules**: An AI software engineer capable of managing repositories, performing coding tasks, and interacting with GitHub.
 - **Smart Tools**: Equipped with a professional native toolbelt:
   - **GoogleSearch**: Integrated search tool for ground-truth verification.
   - **FetchRSS**: Real-time news gathering with automatic database deduplication.
   - **ScrapePage**: High-fidelity text extraction from technical articles.
   - **BrowseWeb**: A headless browser pilot (`chromedp`) for JS-heavy dynamic websites.
-  - **ShellExecute**: Restricted local execution for system monitoring and diagnostics.
+  - **Memory Tools**: Active context management to personalize interactions based on history.
 
 ### 🔌 Multi-Server MCP Integration
 ravenbot supports the **Model Context Protocol (MCP)**, allowing it to seamlessly use tools from multiple servers:
 - **Filesystem**: Safe file operations within allowed directories.
-- **GitHub & Git**: Repository management, PR creation, and version control.
-- **Memory**: Personalized long-term context storage.
+- **GitHub & Git**: Repository management, PR creation, and version control (via `Jules`).
+- **Memory**: Personalized long-term context storage using a dedicated knowledge graph.
 - **Weather**: Real-time environmental data.
+- **System Metrics**: Real-time system health monitoring (CPU, Memory, Disk) via `sysmetrics`.
 - **Sequential Thinking**: Enhanced reasoning for complex problem-solving.
 
 ### 💬 Multi-Channel & Interactive
@@ -31,7 +35,7 @@ ravenbot supports the **Model Context Protocol (MCP)**, allowing it to seamlessl
 - **Two-Way Comms**: Interactive listeners for **Telegram**, **Discord**, and **CLI**.
   - `/research <topic>` - Trigger a deep-dive research mission on any subject.
   - `/jules <repo> <task>` - Delegate complex coding or repository tasks to the **Jules Agent API**.
-  - `/status` - Check system health (disk, memory, uptime).
+  - `/status` - Check system health (disk, memory, uptime) via **SystemManager**.
 - **Secure by Design**: Restricted message processing to authorized Chat/Channel IDs and built-in SSRF protection.
 
 ### 💾 Persistence & Memory
@@ -105,20 +109,14 @@ docker attach ravenbot-ravenbot-1
 ### MCP Servers (config.json)
 MCP servers are defined in `config.json`. ravenbot automatically discovers and namespaces their tools (e.g., `github_create_issue`).
 
-```json
-{
-  "mcpServers": {
-    "github": {
-      "command": "npx",
-      "args": ["-y", "@modelcontextprotocol/server-github"]
-    },
-    "git": {
-      "command": "npx",
-      "args": ["-y", "@cyanheads/git-mcp-server"]
-    }
-  }
-}
-```
+Current active servers:
+- **filesystem**: `@modelcontextprotocol/server-filesystem`
+- **sequential-thinking**: `@modelcontextprotocol/server-sequential-thinking`
+- **git**: `@cyanheads/git-mcp-server`
+- **github**: `@modelcontextprotocol/server-github`
+- **memory**: `@modelcontextprotocol/server-memory`
+- **weather**: `goweathermcp`
+- **sysmetrics**: `sysmetrics-mcp`
 
 ---
 
