@@ -5,9 +5,7 @@ import (
 	"testing"
 
 	"github.com/raythurman2386/ravenbot/internal/config"
-	"github.com/raythurman2386/ravenbot/internal/db"
 	"github.com/raythurman2386/ravenbot/internal/mcp"
-	"github.com/raythurman2386/ravenbot/internal/tools"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -23,8 +21,10 @@ func TestGetRavenTools(t *testing.T) {
 
 	// Test Technical Tools
 	techTools := a.GetTechnicalTools()
-	assert.NotEmpty(t, techTools)
-	techNames := []string{"FetchRSS", "ScrapePage", "ShellExecute", "BrowseWeb", "WebSearch"}
+	assert.NotEmpty(t, techTools, "Technical tools should not be empty")
+
+	// Verify specific tools
+	techNames := []string{"FetchRSS", "ScrapePage", "BrowseWeb", "WebSearch"}
 	for _, name := range techNames {
 		found := false
 		for _, tool := range techTools {
@@ -39,7 +39,9 @@ func TestGetRavenTools(t *testing.T) {
 	// Test Core Tools
 	coreTools := a.GetCoreTools()
 	assert.NotEmpty(t, coreTools)
-	coreNames := []string{"JulesTask", "ReadMCPResource"}
+	// Jules tool is now dynamic and not in GetCoreTools, but appended in NewAgent.
+	// We only check for ReadMCPResource here as Jules is a sub-agent wrapper.
+	coreNames := []string{"ReadMCPResource"}
 	for _, name := range coreNames {
 		found := false
 		for _, tool := range coreTools {
@@ -62,29 +64,6 @@ func TestGetMCPTools(t *testing.T) {
 
 	mcpTools := a.GetMCPTools(ctx)
 	assert.Empty(t, mcpTools)
-}
-
-func TestDeduplicationToolLogic(t *testing.T) {
-	ctx := context.Background()
-	database, err := db.InitDB(":memory:")
-	require.NoError(t, err)
-	defer func() { _ = database.Close() }()
-
-	a := &Agent{db: database}
-
-	// This tests the deduplicateRSSItems helper used by the FetchRSS tool
-	err = a.db.AddHeadline(ctx, "Test Title", "https://example.com/item1")
-	require.NoError(t, err)
-
-	items := []tools.RSSItem{
-		{Title: "Title 1", Link: "https://example.com/item1"}, // Duplicate
-		{Title: "Title 2", Link: "https://example.com/item2"}, // New
-	}
-
-	newItems, err := a.deduplicateRSSItems(ctx, items)
-	assert.NoError(t, err)
-	assert.Len(t, newItems, 1)
-	assert.Equal(t, "https://example.com/item2", newItems[0].Link)
 }
 
 func TestClearSession(t *testing.T) {

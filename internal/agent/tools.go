@@ -2,6 +2,7 @@ package agent
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"log/slog"
 
@@ -50,22 +51,6 @@ func (a *Agent) GetTechnicalTools() []tool.Tool {
 		technicalTools = append(technicalTools, scrapePageTool)
 	}
 
-	// ShellExecute Tool
-	shellExecutor := tools.NewShellExecutor(a.cfg.AllowedCommands)
-	type ShellExecuteArgs struct {
-		Command string   `json:"command" jsonschema:"The command to run (df, free, uptime, whoami, date, hostname, uname, ps, top, echo, ping)."`
-		Args    []string `json:"args,omitempty" jsonschema:"The arguments for the command."`
-	}
-	shellExecuteTool, err := functiontool.New(functiontool.Config{
-		Name:        "ShellExecute",
-		Description: "Executes restricted system diagnostic commands (df, free, uptime, ps, etc.). Use this for basic system health checks.",
-	}, func(ctx tool.Context, args ShellExecuteArgs) (string, error) {
-		return shellExecutor.Execute(ctx, args.Command, args.Args)
-	})
-	if err == nil {
-		technicalTools = append(technicalTools, shellExecuteTool)
-	}
-
 	// BrowseWeb Tool
 	type BrowseWebArgs struct {
 		URL string `json:"url" jsonschema:"The URL of the webpage to browse."`
@@ -101,21 +86,6 @@ func (a *Agent) GetTechnicalTools() []tool.Tool {
 // GetCoreTools returns the tools for the root conversational agent.
 func (a *Agent) GetCoreTools() []tool.Tool {
 	var coreTools []tool.Tool
-
-	// JulesTask Tool
-	type JulesTaskArgs struct {
-		Repo string `json:"repo" jsonschema:"The GitHub repository (e.g., owner/repo)."`
-		Task string `json:"task" jsonschema:"The description of the coding task to perform."`
-	}
-	julesTaskTool, err := functiontool.New(functiontool.Config{
-		Name:        "JulesTask",
-		Description: "Delegates complex coding and repository tasks to the Jules Agent.",
-	}, func(ctx tool.Context, args JulesTaskArgs) (string, error) {
-		return tools.DelegateToJules(ctx, a.cfg.JulesAPIKey, args.Repo, args.Task)
-	})
-	if err == nil {
-		coreTools = append(coreTools, julesTaskTool)
-	}
 
 	// ReadMCPResource Tool
 	type ReadMCPResourceArgs struct {
@@ -175,6 +145,17 @@ func (a *Agent) GetMCPTools(ctx context.Context) []tool.Tool {
 
 func (a *Agent) createADKToolFromMCP(serverName string, mcpTool mcp.Tool) (tool.Tool, error) {
 	namespacedName := fmt.Sprintf("%s_%s", serverName, mcpTool.Name)
+
+	// Sanitize schema: remove $schema field to avoid version mismatch issues
+	// (e.g., draft-07 vs 2020-12) that can cause parsing or validation errors in ADK/Gemini.
+	var rawSchema map[string]any
+	if err := json.Unmarshal(mcpTool.InputSchema, &rawSchema); err == nil {
+		delete(rawSchema, "$schema")
+		sanitized, err := json.Marshal(rawSchema)
+		if err == nil {
+			mcpTool.InputSchema = sanitized
+		}
+	}
 
 	var schema jsonschema.Schema
 	if err := schema.UnmarshalJSON(mcpTool.InputSchema); err != nil {

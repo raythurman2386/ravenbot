@@ -35,7 +35,7 @@ func runMockServer() {
 		switch req.Method {
 		case "initialize":
 			result = InitializeResult{
-				ProtocolVersion: "2024-11-05",
+				ProtocolVersion: "2025-06-18",
 				Capabilities:    map[string]any{},
 				ServerInfo: ServerInfo{
 					Name:    "mock-server",

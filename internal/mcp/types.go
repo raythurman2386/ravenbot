@@ -6,7 +6,7 @@ import "encoding/json"
 const JSONRPCVersion = "2.0"
 
 // LATEST_PROTOCOL_VERSION is the MCP protocol version
-const LATEST_PROTOCOL_VERSION = "0.1.0"
+const LATEST_PROTOCOL_VERSION = "2025-06-18"
 
 // Request represents a JSON-RPC request
 type Request struct {

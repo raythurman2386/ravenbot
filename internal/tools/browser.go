@@ -73,17 +73,11 @@ func (bm *BrowserManager) Browse(ctx context.Context, url string) (string, error
 	)
 
 	if err != nil {
+
 		return "", fmt.Errorf("chromedp failed for %s: %w", url, err)
+
 	}
 
 	return content, nil
-}
 
-// BrowseWeb navigates to a URL and extracts the textual content using chromedp.
-// Deprecated: Use BrowserManager.Browse instead for better performance.
-func BrowseWeb(ctx context.Context, url string) (string, error) {
-	// Create a temporary manager for backward compatibility
-	bm := NewBrowserManager(ctx)
-	defer bm.Close()
-	return bm.Browse(ctx, url)
 }

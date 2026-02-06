@@ -47,12 +47,11 @@ func getNextAPIKey(keys []string) string {
 }
 
 type Agent struct {
-	cfg        *config.Config
-	db         *raven.DB
-	mcpClients map[string]*mcp.Client
-	mu         sync.RWMutex
-
+	cfg            *config.Config
+	db             *raven.DB
+	mcpClients     map[string]*mcp.Client
 	browserManager *tools.BrowserManager
+	mu             sync.RWMutex
 
 	// ADK components - these store the current models but can be rotated
 	flashLLM model.LLM
@@ -194,11 +193,18 @@ func NewAgent(ctx context.Context, cfg *config.Config, database *raven.DB) (*Age
 	mcpTools := a.GetMCPTools(ctx)
 	var rootMCPTools []tool.Tool
 	var researchMCPTools []tool.Tool
+	var systemManagerMCPTools []tool.Tool
+	var julesMCPTools []tool.Tool
 
 	for _, t := range mcpTools {
+		name := t.Name()
 		// Memory tools stay in the root agent for personalization
-		if strings.HasPrefix(t.Name(), "memory_") {
+		if strings.HasPrefix(name, "memory_") {
 			rootMCPTools = append(rootMCPTools, t)
+		} else if strings.HasPrefix(name, "sysmetrics") {
+			systemManagerMCPTools = append(systemManagerMCPTools, t)
+		} else if strings.HasPrefix(name, "github") {
+			julesMCPTools = append(julesMCPTools, t)
 		} else {
 			researchMCPTools = append(researchMCPTools, t)
 		}
@@ -208,7 +214,7 @@ func NewAgent(ctx context.Context, cfg *config.Config, database *raven.DB) (*Age
 	researchAssistant, err := llmagent.New(llmagent.Config{
 		Name:        "ResearchAssistant",
 		Model:       proLLM,
-		Description: "A specialized assistant for technical research, web search, system diagnostics, GitHub, and repository management.",
+		Description: "A specialized assistant for technical research.",
 		Instruction: cfg.Bot.ResearchSystemPrompt,
 		Tools:       append(technicalTools, researchMCPTools...),
 	})
@@ -216,77 +222,75 @@ func NewAgent(ctx context.Context, cfg *config.Config, database *raven.DB) (*Age
 		return nil, fmt.Errorf("failed to create ResearchAssistant: %w", err)
 	}
 
+	// Create System Manager Sub-Agent (Uses Flash Model)
+	systemManagerAgent, err := llmagent.New(llmagent.Config{
+		Name:        "SystemManager",
+		Model:       flashLLM,
+		Description: "A specialized assistant for system diagnostics and health checks.",
+		Instruction: cfg.Bot.SystemManagerPrompt,
+		Tools:       systemManagerMCPTools,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("failed to create SystemManager: %w", err)
+	}
+
+	// Create Jules Sub-Agent (Uses Pro Model for coding)
+	julesAgent, err := llmagent.New(llmagent.Config{
+		Name:        "Jules",
+		Model:       proLLM,
+		Description: "A specialized AI software engineer for coding tasks and GitHub operations.",
+		Instruction: cfg.Bot.JulesPrompt,
+		Tools:       julesMCPTools,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("failed to create Jules agent: %w", err)
+	}
+
 	// Wrap Research Assistant as a Tool
 	type ResearchAssistantArgs struct {
-		Request string `json:"request" jsonschema:"The technical research or diagnostic request."`
+		Request string `json:"request" jsonschema:"The technical research request."`
 	}
 	researchTool, err := functiontool.New(functiontool.Config{
 		Name:        "ResearchAssistant",
-		Description: "A specialized assistant for technical research, web search, system diagnostics, and shell commands.",
+		Description: "A specialized assistant for technical research.",
 	}, func(ctx tool.Context, args ResearchAssistantArgs) (map[string]any, error) {
-		// 1. Create sub-session for the research assistant
-		stateMap := make(map[string]any)
-		for k, v := range ctx.State().All() {
-			if !strings.HasPrefix(k, "_adk") {
-				stateMap[k] = v
-			}
-		}
-
-		subSession, err := sessionService.Create(ctx, &session.CreateRequest{
-			AppName: "ResearchAssistant",
-			UserID:  ctx.UserID(),
-			State:   stateMap,
-		})
-		if err != nil {
-			return nil, fmt.Errorf("failed to create sub-session: %w", err)
-		}
-
-		// 2. Create a one-off runner for this call
-		r, err := runner.New(runner.Config{
-			AppName:        "ResearchAssistant",
-			Agent:          researchAssistant,
-			SessionService: sessionService,
-		})
-		if err != nil {
-			return nil, fmt.Errorf("failed to create sub-runner: %w", err)
-		}
-
-		// 3. Execute and accumulate text output
-		var fullOutput strings.Builder
-		events := r.Run(ctx, ctx.UserID(), subSession.Session.ID(), &genai.Content{
-			Role:  "user",
-			Parts: []*genai.Part{{Text: args.Request}},
-		}, agent.RunConfig{
-			StreamingMode: agent.StreamingModeSSE,
-		})
-
-		for event, err := range events {
-			if err != nil {
-				return nil, err
-			}
-			if event.Content != nil {
-				for _, part := range event.Content.Parts {
-					if part.Text != "" {
-						fullOutput.WriteString(part.Text)
-					}
-				}
-			}
-		}
-
-		result := fullOutput.String()
-		if result == "" {
-			return nil, fmt.Errorf("research assistant returned no output")
-		}
-
-		return map[string]any{"result": result}, nil
+		return a.runSubAgent(ctx, sessionService, researchAssistant, "ResearchAssistant", args.Request)
 	})
 	if err != nil {
 		return nil, fmt.Errorf("failed to create research tool: %w", err)
 	}
 
+	// Wrap System Manager as a Tool
+	type SystemManagerArgs struct {
+		Request string `json:"request" jsonschema:"The system diagnostic request."`
+	}
+	systemManagerTool, err := functiontool.New(functiontool.Config{
+		Name:        "SystemManager",
+		Description: "A specialized assistant for system diagnostics and health checks.",
+	}, func(ctx tool.Context, args SystemManagerArgs) (map[string]any, error) {
+		return a.runSubAgent(ctx, sessionService, systemManagerAgent, "SystemManager", args.Request)
+	})
+	if err != nil {
+		return nil, fmt.Errorf("failed to create system manager tool: %w", err)
+	}
+
+	// Wrap Jules as a Tool
+	type JulesArgs struct {
+		Request string `json:"request" jsonschema:"The coding or GitHub task to perform."`
+	}
+	julesTool, err := functiontool.New(functiontool.Config{
+		Name:        "Jules",
+		Description: "A specialized AI software engineer for coding tasks and GitHub operations.",
+	}, func(ctx tool.Context, args JulesArgs) (map[string]any, error) {
+		return a.runSubAgent(ctx, sessionService, julesAgent, "Jules", args.Request)
+	})
+	if err != nil {
+		return nil, fmt.Errorf("failed to create Jules tool: %w", err)
+	}
+
 	// Final toolset for the Root Agent
 	allRootTools := append(coreTools, rootMCPTools...)
-	allRootTools = append(allRootTools, researchTool)
+	allRootTools = append(allRootTools, researchTool, systemManagerTool, julesTool)
 
 	// Instruction provider logic
 	instructionProvider := func(ctx agent.ReadonlyContext) (string, error) {
@@ -323,7 +327,7 @@ func NewAgent(ctx context.Context, cfg *config.Config, database *raven.DB) (*Age
 		return llmResponse, nil
 	}
 
-	// 5. Create Root ADK LLMAgents (One for Flash, one for Pro)
+	// 6. Create Root ADK LLMAgents (One for Flash, one for Pro)
 	flashAgent, err := llmagent.New(llmagent.Config{
 		Name:                "ravenbot-flash",
 		Model:               flashLLM,
@@ -348,7 +352,7 @@ func NewAgent(ctx context.Context, cfg *config.Config, database *raven.DB) (*Age
 		return nil, fmt.Errorf("failed to create pro agent: %w", err)
 	}
 
-	// 6. Create ADK Runners
+	// 7. Create ADK Runners
 	flashRunner, err := runner.New(runner.Config{
 		AppName:        AppName,
 		Agent:          flashAgent,
@@ -402,11 +406,9 @@ func (a *Agent) compressContext(sessionID string) {
 	slog.Info("Context compressed successfully", "sessionID", sessionID)
 }
 
-// Close cleans up the agent's resources, including the browser manager.
+// Close cleans up the agent's resources.
 func (a *Agent) Close() {
-	if a.browserManager != nil {
-		a.browserManager.Close()
-	}
+	// No resources to clean up currently
 }
 
 // ClearSession removes a chat session (useful for /reset command)
