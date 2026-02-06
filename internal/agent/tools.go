@@ -10,16 +10,12 @@ import (
 	"github.com/google/jsonschema-go/jsonschema"
 	"google.golang.org/adk/tool"
 	"google.golang.org/adk/tool/functiontool"
-	"google.golang.org/adk/tool/geminitool"
 )
 
 // GetTechnicalTools returns the list of tools intended for the ResearchAssistant sub-agent.
 func (a *Agent) GetTechnicalTools() []tool.Tool {
 	var technicalTools []tool.Tool
-
-	// GoogleSearch Tool
-	technicalTools = append(technicalTools, &geminitool.GoogleSearch{})
-
+	// Google Search removed as requested
 	return technicalTools
 }
 

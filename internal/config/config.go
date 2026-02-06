@@ -26,6 +26,7 @@ type BotConfig struct {
 	SystemPrompt         string  `json:"systemPrompt"`
 	ResearchSystemPrompt string  `json:"researchSystemPrompt"`
 	SystemManagerPrompt  string  `json:"systemManagerPrompt"`
+	JulesPrompt          string  `json:"julesPrompt"`
 	TokenLimit           int64   `json:"tokenLimit"`
 	TokenThreshold       float64 `json:"tokenThreshold"`
 	SummaryPrompt        string  `json:"summaryPrompt"`

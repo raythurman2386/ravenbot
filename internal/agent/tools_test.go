@@ -21,22 +21,13 @@ func TestGetRavenTools(t *testing.T) {
 
 	// Test Technical Tools
 	techTools := a.GetTechnicalTools()
-	assert.NotEmpty(t, techTools)
-	techNames := []string{"google_search"}
-	for _, name := range techNames {
-		found := false
-		for _, tool := range techTools {
-			if tool.Name() == name {
-				found = true
-				break
-			}
-		}
-		assert.True(t, found, "Technical tool %s not found", name)
-	}
+	assert.Empty(t, techTools, "Technical tools should be empty after removing GoogleSearch")
 
 	// Test Core Tools
 	coreTools := a.GetCoreTools()
 	assert.NotEmpty(t, coreTools)
+	// Jules tool is now dynamic and not in GetCoreTools, but appended in NewAgent.
+	// We only check for ReadMCPResource here as Jules is a sub-agent wrapper.
 	coreNames := []string{"ReadMCPResource"}
 	for _, name := range coreNames {
 		found := false

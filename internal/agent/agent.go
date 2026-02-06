@@ -191,6 +191,7 @@ func NewAgent(ctx context.Context, cfg *config.Config, database *raven.DB) (*Age
 	var rootMCPTools []tool.Tool
 	var researchMCPTools []tool.Tool
 	var systemManagerMCPTools []tool.Tool
+	var julesMCPTools []tool.Tool
 
 	for _, t := range mcpTools {
 		// Memory tools stay in the root agent for personalization
@@ -198,6 +199,8 @@ func NewAgent(ctx context.Context, cfg *config.Config, database *raven.DB) (*Age
 			rootMCPTools = append(rootMCPTools, t)
 		} else if strings.HasPrefix(t.Name(), "sysmetrics_") {
 			systemManagerMCPTools = append(systemManagerMCPTools, t)
+		} else if strings.HasPrefix(t.Name(), "github_") {
+			julesMCPTools = append(julesMCPTools, t)
 		} else {
 			researchMCPTools = append(researchMCPTools, t)
 		}
@@ -207,7 +210,7 @@ func NewAgent(ctx context.Context, cfg *config.Config, database *raven.DB) (*Age
 	researchAssistant, err := llmagent.New(llmagent.Config{
 		Name:        "ResearchAssistant",
 		Model:       proLLM,
-		Description: "A specialized assistant for technical research, web search, GitHub, and repository management.",
+		Description: "A specialized assistant for technical research.",
 		Instruction: cfg.Bot.ResearchSystemPrompt,
 		Tools:       append(technicalTools, researchMCPTools...),
 	})
@@ -227,13 +230,25 @@ func NewAgent(ctx context.Context, cfg *config.Config, database *raven.DB) (*Age
 		return nil, fmt.Errorf("failed to create SystemManager: %w", err)
 	}
 
+	// Create Jules Sub-Agent (Uses Pro Model for coding)
+	julesAgent, err := llmagent.New(llmagent.Config{
+		Name:        "Jules",
+		Model:       proLLM,
+		Description: "A specialized AI software engineer for coding tasks and GitHub operations.",
+		Instruction: cfg.Bot.JulesPrompt,
+		Tools:       julesMCPTools,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("failed to create Jules agent: %w", err)
+	}
+
 	// Wrap Research Assistant as a Tool
 	type ResearchAssistantArgs struct {
 		Request string `json:"request" jsonschema:"The technical research request."`
 	}
 	researchTool, err := functiontool.New(functiontool.Config{
 		Name:        "ResearchAssistant",
-		Description: "A specialized assistant for technical research, web search, and repository management.",
+		Description: "A specialized assistant for technical research.",
 	}, func(ctx tool.Context, args ResearchAssistantArgs) (map[string]any, error) {
 		return a.runSubAgent(ctx, sessionService, researchAssistant, "ResearchAssistant", args.Request)
 	})
@@ -255,9 +270,23 @@ func NewAgent(ctx context.Context, cfg *config.Config, database *raven.DB) (*Age
 		return nil, fmt.Errorf("failed to create system manager tool: %w", err)
 	}
 
+	// Wrap Jules as a Tool
+	type JulesArgs struct {
+		Request string `json:"request" jsonschema:"The coding or GitHub task to perform."`
+	}
+	julesTool, err := functiontool.New(functiontool.Config{
+		Name:        "Jules",
+		Description: "A specialized AI software engineer for coding tasks and GitHub operations.",
+	}, func(ctx tool.Context, args JulesArgs) (map[string]any, error) {
+		return a.runSubAgent(ctx, sessionService, julesAgent, "Jules", args.Request)
+	})
+	if err != nil {
+		return nil, fmt.Errorf("failed to create Jules tool: %w", err)
+	}
+
 	// Final toolset for the Root Agent
 	allRootTools := append(coreTools, rootMCPTools...)
-	allRootTools = append(allRootTools, researchTool, systemManagerTool)
+	allRootTools = append(allRootTools, researchTool, systemManagerTool, julesTool)
 
 	// Instruction provider logic
 	instructionProvider := func(ctx agent.ReadonlyContext) (string, error) {
