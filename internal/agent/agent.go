@@ -194,7 +194,7 @@ func NewAgent(ctx context.Context, cfg *config.Config, database *raven.DB) (*Age
 	var rootMCPTools []tool.Tool
 	var researchMCPTools []tool.Tool
 	var systemManagerMCPTools []tool.Tool
-	var julesMCPTools []tool.Tool
+	var githubMCPTools []tool.Tool
 
 	for _, t := range mcpTools {
 		name := t.Name()
@@ -204,7 +204,7 @@ func NewAgent(ctx context.Context, cfg *config.Config, database *raven.DB) (*Age
 		} else if strings.HasPrefix(name, "sysmetrics") {
 			systemManagerMCPTools = append(systemManagerMCPTools, t)
 		} else if strings.HasPrefix(name, "github") {
-			julesMCPTools = append(julesMCPTools, t)
+			githubMCPTools = append(githubMCPTools, t)
 		} else {
 			researchMCPTools = append(researchMCPTools, t)
 		}
@@ -255,7 +255,7 @@ func NewAgent(ctx context.Context, cfg *config.Config, database *raven.DB) (*Age
 		Model:       proLLM,
 		Description: "A specialized AI software engineer for coding tasks and GitHub operations.",
 		Instruction: cfg.Bot.JulesPrompt,
-		Tools:       append(julesMCPTools, julesTaskTool),
+		Tools:       append(githubMCPTools, julesTaskTool),
 	})
 	if err != nil {
 		return nil, fmt.Errorf("failed to create Jules agent: %w", err)
