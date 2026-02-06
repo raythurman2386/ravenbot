@@ -92,7 +92,7 @@ func TestStdioClient(t *testing.T) {
 		t.Fatalf("Failed to get executable: %v", err)
 	}
 
-	client := NewStdioClient(exe, []string{})
+	client := NewStdioClient(exe, []string{}, nil)
 	// Set the env var for the subprocess
 	client.transport.(*StdioTransport).cmd.Env = append(os.Environ(), "GO_TEST_MCP_SERVER=1")
 
@@ -138,7 +138,7 @@ func TestClientNotification(t *testing.T) {
 		t.Fatalf("Failed to get executable: %v", err)
 	}
 
-	client := NewStdioClient(exe, []string{})
+	client := NewStdioClient(exe, []string{}, nil)
 	// Set the env var for the subprocess
 	client.transport.(*StdioTransport).cmd.Env = append(os.Environ(), "GO_TEST_MCP_SERVER=1")
 

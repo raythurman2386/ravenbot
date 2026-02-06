@@ -50,7 +50,8 @@
                 "@modelcontextprotocol/server-memory"
             ],
             "env": {
-                "MEMORY_FILE_PATH": "data/memory.json"
+                "MEMORY_FILE_PATH": "$PWD/data/memory.json",
+                "MEMORIES_FILE_PATH": "$PWD/data/memory.json"
             }
         },
         "weather": {
