@@ -51,12 +51,27 @@ type StdioTransport struct {
 
 // NewStdioClient creates a new client using stdio transport
 func NewStdioClient(command string, args []string, env map[string]string) *Client {
-	cmd := exec.Command(command, args...)
+	cwd, _ := os.Getwd()
+	expandedArgs := make([]string, len(args))
+	for i, arg := range args {
+		expanded := arg
+		if strings.Contains(arg, "$PWD") {
+			expanded = strings.ReplaceAll(arg, "$PWD", cwd)
+		}
+		expandedArgs[i] = os.ExpandEnv(expanded)
+	}
+
+	cmd := exec.Command(command, expandedArgs...)
 	if len(env) > 0 {
 		cmd.Env = os.Environ()
 		for k, v := range env {
 			// Expand environment variables in the value (e.g., $HOME/data)
-			expandedValue := os.ExpandEnv(v)
+			// Manually handle $PWD if it's missing from the environment
+			expandedValue := v
+			if strings.Contains(v, "$PWD") {
+				expandedValue = strings.ReplaceAll(v, "$PWD", cwd)
+			}
+			expandedValue = os.ExpandEnv(expandedValue)
 			cmd.Env = append(cmd.Env, fmt.Sprintf("%s=%s", k, expandedValue))
 		}
 	}

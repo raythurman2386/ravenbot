@@ -29,13 +29,6 @@
                 "@modelcontextprotocol/server-sequential-thinking"
             ]
         },
-        "git": {
-            "command": "npx",
-            "args": [
-                "-y",
-                "@cyanheads/git-mcp-server"
-            ]
-        },
         "github": {
             "command": "npx",
             "args": [
@@ -50,8 +43,8 @@
                 "@modelcontextprotocol/server-memory"
             ],
             "env": {
-                "MEMORY_FILE_PATH": "$PWD/data/memory.json",
-                "MEMORIES_FILE_PATH": "$PWD/data/memory.json"
+                "MEMORY_FILE_PATH": "$PWD/data/memory.jsonl",
+                "MEMORIES_FILE_PATH": "$PWD/data/memory.jsonl"
             }
         },
         "weather": {
