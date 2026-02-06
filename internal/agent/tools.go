@@ -2,6 +2,7 @@ package agent
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"log/slog"
 
@@ -144,6 +145,17 @@ func (a *Agent) GetMCPTools(ctx context.Context) []tool.Tool {
 
 func (a *Agent) createADKToolFromMCP(serverName string, mcpTool mcp.Tool) (tool.Tool, error) {
 	namespacedName := fmt.Sprintf("%s_%s", serverName, mcpTool.Name)
+
+	// Sanitize schema: remove $schema field to avoid version mismatch issues
+	// (e.g., draft-07 vs 2020-12) that can cause parsing or validation errors in ADK/Gemini.
+	var rawSchema map[string]any
+	if err := json.Unmarshal(mcpTool.InputSchema, &rawSchema); err == nil {
+		delete(rawSchema, "$schema")
+		sanitized, err := json.Marshal(rawSchema)
+		if err == nil {
+			mcpTool.InputSchema = sanitized
+		}
+	}
 
 	var schema jsonschema.Schema
 	if err := schema.UnmarshalJSON(mcpTool.InputSchema); err != nil {

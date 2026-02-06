@@ -9,6 +9,7 @@ import (
 	"log/slog"
 	"net/http"
 	"os/exec"
+	"time"
 
 	"github.com/raythurman2386/ravenbot/internal/tools"
 	"strings"
@@ -302,14 +303,19 @@ func (c *Client) SendRequest(method string, params any) (json.RawMessage, error)
 		return nil, err
 	}
 
-	// Wait for response
-	resp := <-ch
-
-	if resp.Error != nil {
-		return nil, fmt.Errorf("RPC error %d: %s", resp.Error.Code, resp.Error.Message)
+	// Wait for response with timeout
+	select {
+	case resp := <-ch:
+		if resp.Error != nil {
+			return nil, fmt.Errorf("RPC error %d: %s", resp.Error.Code, resp.Error.Message)
+		}
+		return resp.Result, nil
+	case <-time.After(10 * time.Second):
+		c.pendingMu.Lock()
+		delete(c.pending, id)
+		c.pendingMu.Unlock()
+		return nil, fmt.Errorf("MCP request timed out after 10s")
 	}
-
-	return resp.Result, nil
 }
 
 // Initialize performs the handshake
