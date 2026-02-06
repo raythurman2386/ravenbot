@@ -5,79 +5,21 @@ import (
 	"fmt"
 	"log/slog"
 
-	"github.com/raythurman2386/ravenbot/internal/db"
 	"github.com/raythurman2386/ravenbot/internal/mcp"
 	"github.com/raythurman2386/ravenbot/internal/tools"
 
 	"github.com/google/jsonschema-go/jsonschema"
 	"google.golang.org/adk/tool"
 	"google.golang.org/adk/tool/functiontool"
+	"google.golang.org/adk/tool/geminitool"
 )
 
 // GetTechnicalTools returns the list of tools intended for the ResearchAssistant sub-agent.
 func (a *Agent) GetTechnicalTools() []tool.Tool {
 	var technicalTools []tool.Tool
 
-	// FetchRSS Tool
-	type FetchRSSArgs struct {
-		URL string `json:"url" jsonschema:"The URL of the RSS feed."`
-	}
-	fetchRSSTool, err := functiontool.New(functiontool.Config{
-		Name:        "FetchRSS",
-		Description: "Fetches information from an RSS feed URL. Returns a list of titles, links, and descriptions.",
-	}, func(ctx tool.Context, args FetchRSSArgs) ([]tools.RSSItem, error) {
-		items, err := tools.FetchRSS(ctx, args.URL)
-		if err != nil {
-			return nil, err
-		}
-		return a.deduplicateRSSItems(ctx, items)
-	})
-	if err == nil {
-		technicalTools = append(technicalTools, fetchRSSTool)
-	}
-
-	// ScrapePage Tool
-	type ScrapePageArgs struct {
-		URL string `json:"url" jsonschema:"The URL of the webpage to scrape."`
-	}
-	scrapePageTool, err := functiontool.New(functiontool.Config{
-		Name:        "ScrapePage",
-		Description: "Extracts textual content from a static webpage URL. Use this for standard HTML pages.",
-	}, func(ctx tool.Context, args ScrapePageArgs) (string, error) {
-		return tools.ScrapePage(ctx, args.URL)
-	})
-	if err == nil {
-		technicalTools = append(technicalTools, scrapePageTool)
-	}
-
-	// BrowseWeb Tool
-	type BrowseWebArgs struct {
-		URL string `json:"url" jsonschema:"The URL of the webpage to browse."`
-	}
-	browseWebTool, err := functiontool.New(functiontool.Config{
-		Name:        "BrowseWeb",
-		Description: "Renders a webpage using a headless browser. Use this for JavaScript-heavy or single-page applications.",
-	}, func(ctx tool.Context, args BrowseWebArgs) (string, error) {
-		return a.browserManager.Browse(ctx, args.URL)
-	})
-	if err == nil {
-		technicalTools = append(technicalTools, browseWebTool)
-	}
-
-	// WebSearch Tool
-	type WebSearchArgs struct {
-		Query      string `json:"query" jsonschema:"The search query."`
-		MaxResults int    `json:"max_results,omitempty" jsonschema:"Max results (default 5)."`
-	}
-	webSearchTool, err := functiontool.New(functiontool.Config{
-		Name:        "WebSearch",
-		Description: "Searches the web for real-time information and documentation.",
-	}, func(ctx tool.Context, args WebSearchArgs) ([]tools.SearchResult, error) {
-		return tools.DuckDuckGoSearch(ctx, args.Query, args.MaxResults)
-	})
-	if err == nil {
-		technicalTools = append(technicalTools, webSearchTool)
-	}
+	// GoogleSearch Tool
+	technicalTools = append(technicalTools, &geminitool.GoogleSearch{})
 
 	return technicalTools
 }
@@ -196,39 +138,3 @@ func (a *Agent) createADKToolFromMCP(serverName string, mcpTool mcp.Tool) (tool.
 	}, handler)
 }
 
-func (a *Agent) deduplicateRSSItems(ctx context.Context, items []tools.RSSItem) ([]tools.RSSItem, error) {
-	if len(items) == 0 {
-		return nil, nil
-	}
-
-	urls := make([]string, len(items))
-	for i, item := range items {
-		urls[i] = item.Link
-	}
-
-	existing, err := a.db.GetExistingHeadlines(ctx, urls)
-	if err != nil {
-		return nil, err
-	}
-
-	var newItems []tools.RSSItem
-	var headlinesToInsert []db.Headline
-
-	for _, item := range items {
-		if !existing[item.Link] {
-			newItems = append(newItems, item)
-			headlinesToInsert = append(headlinesToInsert, db.Headline{
-				Title: item.Title,
-				URL:   item.Link,
-			})
-			// Prevent duplicates within the same batch
-			existing[item.Link] = true
-		}
-	}
-
-	if err := a.db.AddHeadlines(ctx, headlinesToInsert); err != nil {
-		return nil, err
-	}
-
-	return newItems, nil
-}
