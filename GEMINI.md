@@ -37,11 +37,20 @@ RavenBot uses a two-stage routing pattern implemented in `internal/agent/agent.g
     - "Simple" requests are handled by the **Flash Runner** for low-latency chat.
     - "Complex" requests (reasoning, tool use, technical tasks) are routed to the **Pro Runner**.
 
-### 2. ResearchAssistant Sub-Agent
-For deep-dive missions, RavenBot utilizes a specialized sub-agent:
-- **Lifecycle**: Created as a `llmagent` within the main Agent. It is also wrapped as an ADK tool (`ResearchAssistant`) that the root agent can call.
-- **Tools**: It has access to the full technical toolbelt (Search, Browse, RSS, Scrape) and relevant MCP tools.
-- **Isolation**: Each mission run is isolated with its own session lifecycle.
+### 2. Specialized Sub-Agents
+RavenBot utilizes specialized sub-agents for distinct domains:
+- **ResearchAssistant**:
+  - **Goal**: Deep technical research, web search, and data aggregation.
+  - **Tools**: `GoogleSearch`, `BrowseWeb`, `ScrapePage`, `FetchRSS`.
+  - **Lifecycle**: Isolated session for each research mission.
+- **SystemManager**:
+  - **Goal**: System health monitoring and diagnostics.
+  - **Tools**: `sysmetrics_*` (native system metrics via MCP).
+  - **Usage**: Invoked by `/status` or when system issues are detected.
+- **Jules**:
+  - **Goal**: Coding, repository management, and GitHub interactions.
+  - **Tools**: `github_*`, `git_*`, and file operations.
+  - **Usage**: Invoked explicitly via `/jules` or for complex coding requests.
 
 ### 3. Context Compression (Summarization)
 To prevent context window overflow, the agent monitors token usage:
@@ -50,9 +59,11 @@ To prevent context window overflow, the agent monitors token usage:
 - The original session is cleared to reset the context window.
 
 ### 4. MCP Tool Namespacing
-Tools discovered from MCP servers are dynamically registered and prefixed with the server name (e.g., `github_create_pull_request`).
-- `memory_` tools are kept in the root agent to maintain personalized context.
-- Most other MCP tools are delegated to the `ResearchAssistant`.
+Tools discovered from MCP servers are dynamically registered and prefixed with the server name.
+- **`memory_`**: Kept in the root agent to maintain personalized user context and history.
+- **`sysmetrics_`**: Delegated to the **SystemManager**.
+- **`github_` / `git_`**: Delegated to **Jules** for repository operations.
+- **`weather_` / `filesystem_`**: Generally available to the Pro Runner or specific sub-agents as needed.
 
 ## 🛡 Security & Constraints
 - **SSRF Protection**: All outbound web requests must pass through `internal/tools/validator.go`. Local/private IPs are blocked by default unless `ALLOW_LOCAL_URLS=true` is set.
