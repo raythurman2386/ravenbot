@@ -180,7 +180,7 @@ func main() {
 			repo := parts[0]
 			task := strings.Join(parts[1:], " ")
 			reply(fmt.Sprintf("🤖 Delegating to Jules for **%s**: %s", repo, task))
-			prompt := fmt.Sprintf("Use the JulesTask tool to delegate this coding task to Jules for the repository %s: %s", repo, task)
+			prompt := fmt.Sprintf("Ask the Jules agent to delegate this coding task to the external Jules service for repository %s: %s", repo, task)
 			response, err := bot.Chat(ctx, sessionID, prompt)
 			if err != nil {
 				slog.Error("Jules delegation failed", "repo", repo, "task", task, "error", err)

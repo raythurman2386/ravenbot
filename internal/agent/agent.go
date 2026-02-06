@@ -234,13 +234,28 @@ func NewAgent(ctx context.Context, cfg *config.Config, database *raven.DB) (*Age
 		return nil, fmt.Errorf("failed to create SystemManager: %w", err)
 	}
 
+	// Wrap JulesTask as a Tool (External Service) - Available to the Jules Sub-Agent
+	type JulesTaskArgs struct {
+		Repo string `json:"repo" jsonschema:"The repository in 'owner/repo' format."`
+		Task string `json:"task" jsonschema:"The coding task description."`
+	}
+	julesTaskTool, err := functiontool.New(functiontool.Config{
+		Name:        "JulesTask",
+		Description: "Delegates a coding task to the external Jules service.",
+	}, func(ctx tool.Context, args JulesTaskArgs) (string, error) {
+		return tools.DelegateToJules(ctx, cfg.JulesAPIKey, args.Repo, args.Task)
+	})
+	if err != nil {
+		return nil, fmt.Errorf("failed to create JulesTask tool: %w", err)
+	}
+
 	// Create Jules Sub-Agent (Uses Pro Model for coding)
 	julesAgent, err := llmagent.New(llmagent.Config{
 		Name:        "Jules",
 		Model:       proLLM,
 		Description: "A specialized AI software engineer for coding tasks and GitHub operations.",
 		Instruction: cfg.Bot.JulesPrompt,
-		Tools:       julesMCPTools,
+		Tools:       append(julesMCPTools, julesTaskTool),
 	})
 	if err != nil {
 		return nil, fmt.Errorf("failed to create Jules agent: %w", err)
@@ -288,24 +303,9 @@ func NewAgent(ctx context.Context, cfg *config.Config, database *raven.DB) (*Age
 		return nil, fmt.Errorf("failed to create Jules tool: %w", err)
 	}
 
-	// Wrap JulesTask as a Tool (External Service)
-	type JulesTaskArgs struct {
-		Repo string `json:"repo" jsonschema:"The repository in 'owner/repo' format."`
-		Task string `json:"task" jsonschema:"The coding task description."`
-	}
-	julesTaskTool, err := functiontool.New(functiontool.Config{
-		Name:        "JulesTask",
-		Description: "Delegates a coding task to the external Jules service.",
-	}, func(ctx tool.Context, args JulesTaskArgs) (string, error) {
-		return tools.DelegateToJules(ctx, cfg.JulesAPIKey, args.Repo, args.Task)
-	})
-	if err != nil {
-		return nil, fmt.Errorf("failed to create JulesTask tool: %w", err)
-	}
-
 	// Final toolset for the Root Agent
 	allRootTools := append(coreTools, rootMCPTools...)
-	allRootTools = append(allRootTools, researchTool, systemManagerTool, julesTool, julesTaskTool)
+	allRootTools = append(allRootTools, researchTool, systemManagerTool, julesTool)
 
 	// Instruction provider logic
 	instructionProvider := func(ctx agent.ReadonlyContext) (string, error) {
