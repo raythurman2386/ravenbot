@@ -24,7 +24,7 @@ Equipped with a **Gemini 3 Pro** brain and a **Gemini 3 Flash** router, ravenbot
 ### 🔌 Multi-Server MCP Integration
 ravenbot supports the **Model Context Protocol (MCP)**, allowing it to seamlessly use tools from multiple servers:
 - **Filesystem**: Safe file operations within allowed directories.
-- **GitHub & Git**: Repository management, PR creation, and version control (via `Jules`).
+- **GitHub**: Repository management, PR creation, and version control (via `Jules`).
 - **Memory**: Personalized long-term context storage using a dedicated knowledge graph.
 - **Weather**: Real-time environmental data.
 - **System Metrics**: Real-time system health monitoring (CPU, Memory, Disk) via `sysmetrics`.
@@ -112,7 +112,6 @@ MCP servers are defined in `config.json`. ravenbot automatically discovers and n
 The following servers are currently active:
 - **filesystem**: `@modelcontextprotocol/server-filesystem`
 - **sequential-thinking**: `@modelcontextprotocol/server-sequential-thinking`
-- **git**: `@cyanheads/git-mcp-server`
 - **github**: `@modelcontextprotocol/server-github`
 - **memory**: `@modelcontextprotocol/server-memory`
 - **weather**: `goweathermcp`

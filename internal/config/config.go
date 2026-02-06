@@ -33,6 +33,7 @@ type BotConfig struct {
 	SummaryPrompt        string  `json:"summaryPrompt"`
 	HelpMessage          string  `json:"helpMessage"`
 	StatusPrompt         string  `json:"statusPrompt"`
+	RoutingPrompt        string  `json:"routingPrompt"`
 }
 
 type Config struct {
