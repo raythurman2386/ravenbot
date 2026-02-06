@@ -200,9 +200,10 @@ func NewAgent(ctx context.Context, cfg *config.Config, database *raven.DB) (*Age
 
 	for _, t := range mcpTools {
 		name := t.Name()
-		// Memory tools stay in the root agent for personalization
+		// Memory tools are shared between the root agent and research assistant
 		if strings.HasPrefix(name, "memory_") {
 			rootMCPTools = append(rootMCPTools, t)
+			a.researchMCPTools = append(a.researchMCPTools, t)
 		} else if strings.HasPrefix(name, "sysmetrics") {
 			systemManagerMCPTools = append(systemManagerMCPTools, t)
 		} else if strings.HasPrefix(name, "github") {
