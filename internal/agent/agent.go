@@ -120,11 +120,11 @@ func NewAgent(ctx context.Context, cfg *config.Config, database *raven.DB) (*Age
 	}
 
 	a := &Agent{
-		cfg:            cfg,
-		db:             database,
-		mcpClients:     make(map[string]*mcp.Client),
-		flashLLM:       flashLLM,
-		proLLM:         proLLM,
+		cfg:        cfg,
+		db:         database,
+		mcpClients: make(map[string]*mcp.Client),
+		flashLLM:   flashLLM,
+		proLLM:     proLLM,
 	}
 
 	// 3. Initialize MCP Servers

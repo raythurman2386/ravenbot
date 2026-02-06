@@ -121,4 +121,3 @@ func (a *Agent) createADKToolFromMCP(serverName string, mcpTool mcp.Tool) (tool.
 		InputSchema: &schema,
 	}, handler)
 }
-
