@@ -10,7 +10,7 @@ Equipped with a **Gemini 3 Pro** brain and a **Gemini 3 Flash** router, ravenbot
 
 ### 🧠 Advanced Intelligence
 - **Flash-First Routing**: Uses **Gemini 3 Flash** to intelligently classify prompts as "Simple" or "Complex", routing them to the optimal model to balance speed and reasoning depth.
-- **Specialized Sub-Agents**:
+- **Active Sub-Agents**:
   - **ResearchAssistant**: A dedicated **Gemini 3 Pro** powered sub-agent for deep technical research, web search, and data aggregation.
   - **SystemManager**: A specialized agent for system diagnostics and health monitoring using native system metrics.
   - **Jules**: An AI software engineer capable of managing repositories, performing coding tasks, and interacting with GitHub.
@@ -106,10 +106,10 @@ docker attach ravenbot-ravenbot-1
 | `GITHUB_PERSONAL_ACCESS_TOKEN` | Token for GitHub MCP tools. |
 | `ALLOW_LOCAL_URLS` | Set to `true` to allow access to local/private IPs (default: `false`). |
 
-### MCP Servers (config.json)
+### Active MCP Servers (config.json)
 MCP servers are defined in `config.json`. ravenbot automatically discovers and namespaces their tools (e.g., `github_create_issue`).
 
-Current active servers:
+The following servers are currently active:
 - **filesystem**: `@modelcontextprotocol/server-filesystem`
 - **sequential-thinking**: `@modelcontextprotocol/server-sequential-thinking`
 - **git**: `@cyanheads/git-mcp-server`
