@@ -37,8 +37,8 @@ RavenBot uses a two-stage routing pattern implemented in `internal/agent/agent.g
     - "Simple" requests are handled by the **Flash Runner** for low-latency chat.
     - "Complex" requests (reasoning, tool use, technical tasks) are routed to the **Pro Runner**.
 
-### 2. Specialized Sub-Agents
-RavenBot utilizes specialized sub-agents for distinct domains:
+### 2. Active Sub-Agents
+RavenBot utilizes three active specialized sub-agents for distinct domains:
 - **ResearchAssistant**:
   - **Goal**: Deep technical research, web search, and data aggregation.
   - **Tools**: `GoogleSearch`, `BrowseWeb`, `ScrapePage`, `FetchRSS`.
@@ -58,12 +58,13 @@ To prevent context window overflow, the agent monitors token usage:
 - The summary is stored in the `Agent.summaries` map and injected into the system prompt for subsequent turns.
 - The original session is cleared to reset the context window.
 
-### 4. MCP Tool Namespacing
-Tools discovered from MCP servers are dynamically registered and prefixed with the server name.
+### 4. Active MCP Servers & Tool Namespacing
+Tools discovered from the active MCP servers are dynamically registered and prefixed with the server name.
 - **`memory_`**: Kept in the root agent to maintain personalized user context and history.
 - **`sysmetrics_`**: Delegated to the **SystemManager**.
 - **`github_` / `git_`**: Delegated to **Jules** for repository operations.
 - **`weather_` / `filesystem_`**: Generally available to the Pro Runner or specific sub-agents as needed.
+- **`sequentialthinking_`**: Available to the Pro Runner to enhance reasoning capabilities.
 
 ## 🛡 Security & Constraints
 - **SSRF Protection**: All outbound web requests must pass through `internal/tools/validator.go`. Local/private IPs are blocked by default unless `ALLOW_LOCAL_URLS=true` is set.
