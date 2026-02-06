@@ -138,6 +138,7 @@ type SSETransport struct {
 	messageEndpoint string
 	client          *http.Client
 	closer          chan struct{}
+	reader          io.ReadCloser
 }
 
 // NewSSEClient creates a new client using SSE transport
@@ -169,6 +170,8 @@ func (t *SSETransport) Start() error {
 		_ = resp.Body.Close()
 		return fmt.Errorf("unexpected status code: %d", resp.StatusCode)
 	}
+
+	t.reader = resp.Body
 
 	// We'll read from resp.Body in ReadLoop.
 	// We need the session ID or message endpoint if provided by the server.
@@ -205,19 +208,24 @@ func (t *SSETransport) WriteRequest(req []byte) error {
 }
 
 func (t *SSETransport) ReadLoop(handler func(line []byte)) {
-	// Re-get connection since it was opened in Start()
-	// Actually, Start() should probably store the body or we should re-open here.
-	// For simplicity in this implementation, let's re-open.
-	req, _ := http.NewRequest("GET", t.url, nil)
-	req.Header.Set("Accept", "text/event-stream")
-	resp, err := t.client.Do(req)
-	if err != nil {
-		slog.Error("SSE ReadLoop failed to connect", "error", err)
-		return
+	var body io.ReadCloser
+	if t.reader != nil {
+		body = t.reader
+		t.reader = nil
+	} else {
+		// Re-get connection since it was opened in Start() but not stored
+		req, _ := http.NewRequest("GET", t.url, nil)
+		req.Header.Set("Accept", "text/event-stream")
+		resp, err := t.client.Do(req)
+		if err != nil {
+			slog.Error("SSE ReadLoop failed to connect", "error", err)
+			return
+		}
+		body = resp.Body
 	}
-	defer func() { _ = resp.Body.Close() }()
+	defer func() { _ = body.Close() }()
 
-	scanner := bufio.NewScanner(resp.Body)
+	scanner := bufio.NewScanner(body)
 	for scanner.Scan() {
 		line := scanner.Text()
 		if strings.HasPrefix(line, "data: ") {

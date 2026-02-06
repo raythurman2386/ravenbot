@@ -108,30 +108,23 @@ func (a *Agent) rotateModels(ctx context.Context) error {
 func NewAgent(ctx context.Context, cfg *config.Config, database *raven.DB) (*Agent, error) {
 	slog.Info("Initializing agent with API key rotation", "num_keys", len(cfg.GeminiAPIKeys))
 
-	// 1. Initialize ADK Models (Flash & Pro) with rotating API keys
-	flashLLM, err := gemini.NewModel(ctx, cfg.Bot.FlashModel, &genai.ClientConfig{
-		APIKey:  getNextAPIKey(cfg.GeminiAPIKeys),
-		Backend: genai.BackendGeminiAPI,
-	})
-	if err != nil {
-		return nil, fmt.Errorf("failed to create ADK Gemini Flash model: %w", err)
-	}
-
-	proLLM, err := gemini.NewModel(ctx, cfg.Bot.ProModel, &genai.ClientConfig{
-		APIKey:  getNextAPIKey(cfg.GeminiAPIKeys),
-		Backend: genai.BackendGeminiAPI,
-	})
-	if err != nil {
-		return nil, fmt.Errorf("failed to create ADK Gemini Pro model: %w", err)
-	}
-
 	a := &Agent{
 		cfg:            cfg,
 		db:             database,
 		mcpClients:     make(map[string]*mcp.Client),
-		flashLLM:       flashLLM,
-		proLLM:         proLLM,
 		browserManager: tools.NewBrowserManager(ctx),
+	}
+
+	// 1. Initialize ADK Models (Flash & Pro) with rotating API keys
+	var err error
+	a.flashLLM, err = a.createFlashModel(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create ADK Gemini Flash model: %w", err)
+	}
+
+	a.proLLM, err = a.createProModel(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create ADK Gemini Pro model: %w", err)
 	}
 
 	// 3. Initialize MCP Servers
@@ -216,7 +209,7 @@ func NewAgent(ctx context.Context, cfg *config.Config, database *raven.DB) (*Age
 	// Create Research Assistant Sub-Agent (Uses Flash Model for speed and efficiency)
 	researchAssistant, err := llmagent.New(llmagent.Config{
 		Name:        "ResearchAssistant",
-		Model:       flashLLM,
+		Model:       a.flashLLM,
 		Description: "A specialized assistant for technical research.",
 		Instruction: cfg.Bot.ResearchSystemPrompt,
 		Tools:       append(a.technicalTools, a.researchMCPTools...),
@@ -228,7 +221,7 @@ func NewAgent(ctx context.Context, cfg *config.Config, database *raven.DB) (*Age
 	// Create System Manager Sub-Agent (Uses Flash Model)
 	systemManagerAgent, err := llmagent.New(llmagent.Config{
 		Name:        "SystemManager",
-		Model:       flashLLM,
+		Model:       a.flashLLM,
 		Description: "A specialized assistant for system diagnostics and health checks.",
 		Instruction: cfg.Bot.SystemManagerPrompt,
 		Tools:       systemManagerMCPTools,
@@ -255,7 +248,7 @@ func NewAgent(ctx context.Context, cfg *config.Config, database *raven.DB) (*Age
 	// Create Jules Sub-Agent (Uses Pro Model for coding)
 	julesAgent, err := llmagent.New(llmagent.Config{
 		Name:        "Jules",
-		Model:       proLLM,
+		Model:       a.proLLM,
 		Description: "A specialized AI software engineer for coding tasks and GitHub operations.",
 		Instruction: cfg.Bot.JulesPrompt,
 		Tools:       append(githubMCPTools, julesTaskTool),
@@ -348,7 +341,7 @@ func NewAgent(ctx context.Context, cfg *config.Config, database *raven.DB) (*Age
 	// 6. Create Root ADK LLMAgents (One for Flash, one for Pro)
 	flashAgent, err := llmagent.New(llmagent.Config{
 		Name:                "ravenbot-flash",
-		Model:               flashLLM,
+		Model:       a.flashLLM,
 		Description:         "RavenBot Flash Agent",
 		InstructionProvider: instructionProvider,
 		Tools:               allRootTools,
@@ -360,7 +353,7 @@ func NewAgent(ctx context.Context, cfg *config.Config, database *raven.DB) (*Age
 
 	proAgent, err := llmagent.New(llmagent.Config{
 		Name:                "ravenbot-pro",
-		Model:               proLLM,
+		Model:       a.proLLM,
 		Description:         "RavenBot Pro Agent",
 		InstructionProvider: instructionProvider,
 		Tools:               allRootTools,
