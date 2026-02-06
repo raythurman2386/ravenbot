@@ -61,6 +61,10 @@ type Agent struct {
 	proRunner   *runner.Runner
 
 	sessionService session.Service
+
+	// Tool storage for missions and sub-agents
+	technicalTools   []tool.Tool
+	researchMCPTools []tool.Tool
 }
 
 // createFlashModel creates a new Flash model with a rotating API key
@@ -186,13 +190,11 @@ func NewAgent(ctx context.Context, cfg *config.Config, database *raven.DB) (*Age
 	a.sessionService = sessionService
 
 	// 5. Gather Tools and Create Sub-Agents
-	technicalTools := a.GetTechnicalTools()
+	a.technicalTools = a.GetTechnicalTools()
+	mcpTools := a.GetMCPTools(ctx)
 	coreTools := a.GetCoreTools()
 
-	// Categorize MCP Tools
-	mcpTools := a.GetMCPTools(ctx)
 	var rootMCPTools []tool.Tool
-	var researchMCPTools []tool.Tool
 	var systemManagerMCPTools []tool.Tool
 	var githubMCPTools []tool.Tool
 
@@ -206,17 +208,17 @@ func NewAgent(ctx context.Context, cfg *config.Config, database *raven.DB) (*Age
 		} else if strings.HasPrefix(name, "github") {
 			githubMCPTools = append(githubMCPTools, t)
 		} else {
-			researchMCPTools = append(researchMCPTools, t)
+			a.researchMCPTools = append(a.researchMCPTools, t)
 		}
 	}
 
-	// Create Research Assistant Sub-Agent (Uses Pro Model)
+	// Create Research Assistant Sub-Agent (Uses Flash Model for speed and efficiency)
 	researchAssistant, err := llmagent.New(llmagent.Config{
 		Name:        "ResearchAssistant",
-		Model:       proLLM,
+		Model:       flashLLM,
 		Description: "A specialized assistant for technical research.",
 		Instruction: cfg.Bot.ResearchSystemPrompt,
-		Tools:       append(technicalTools, researchMCPTools...),
+		Tools:       append(a.technicalTools, a.researchMCPTools...),
 	})
 	if err != nil {
 		return nil, fmt.Errorf("failed to create ResearchAssistant: %w", err)
@@ -423,7 +425,9 @@ func (a *Agent) compressContext(sessionID string) {
 
 // Close cleans up the agent's resources.
 func (a *Agent) Close() {
-	// No resources to clean up currently
+	if a.browserManager != nil {
+		a.browserManager.Close()
+	}
 }
 
 // ClearSession removes a chat session (useful for /reset command)
@@ -448,24 +452,22 @@ func (a *Agent) ClearSession(sessionID string) {
 }
 
 // classifyPrompt determines if the prompt is 'Simple' or 'Complex' using the Flash model.
-// Biased towards "Simple" to favor Flash model usage for cost efficiency.
+// Heavily biased towards "Simple" to maximize the usage of the highly capable Flash model.
 // Includes retry logic with API key rotation on rate limit errors.
 func (a *Agent) classifyPrompt(ctx context.Context, message string) string {
-	prompt := fmt.Sprintf(`You are a request classifier. Default to "Simple" unless clearly complex.
+	prompt := fmt.Sprintf(`You are a highly efficient request classifier. Your goal is to maximize the use of the Flash model, which is extremely capable, reserving the Pro model ONLY for the most extreme reasoning cases.
 
-Classify as "Simple" (use Flash model):
-- Conversational messages, greetings, small talk
-- Simple questions with straightforward answers
-- Factual lookups, definitions, explanations
-- Short acknowledgments or follow-ups
-- General knowledge questions
-- Most everyday requests
+Classify as "Simple" (use Flash model) for:
+- ALMOST EVERYTHING: Greetings, general chat, and common questions.
+- Most coding tasks, debugging, and explanations.
+- Standard tool usage and single-step research.
+- Summarization and creative writing.
+- Any task where high speed and strong performance are desired.
 
 Classify as "Complex" (use Pro model) ONLY for:
-- Multi-step mathematical proofs or calculations
-- Complex code debugging requiring deep analysis
-- Tasks explicitly requiring multiple tool calls in sequence
-- Advanced reasoning puzzles or logic problems
+- Highly advanced multi-step logical proofs or complex scientific reasoning.
+- Deep, multi-file architectural code refactoring.
+- Tasks requiring the absolute maximum reasoning density available.
 
 User Input: "%s"
 
@@ -573,7 +575,7 @@ func (a *Agent) Chat(ctx context.Context, sessionID, message string) (string, er
 }
 
 // RunMission executes a one-shot research mission (no session persistence).
-// Missions always default to the Pro model for deep research.
+// Missions now default to the Flash model for speed and efficiency.
 func (a *Agent) RunMission(ctx context.Context, prompt string) (string, error) {
 	missionID := fmt.Sprintf("mission-%d", time.Now().UnixNano())
 	userID := "mission-user"
@@ -601,10 +603,10 @@ func (a *Agent) RunMission(ctx context.Context, prompt string) (string, error) {
 
 	missionAgent, err := llmagent.New(llmagent.Config{
 		Name:        "ravenbot-mission",
-		Model:       a.proLLM, // Use Pro model for missions
+		Model:       a.flashLLM, // Use Flash model for missions
 		Description: "RavenBot research mission agent",
 		Instruction: a.cfg.Bot.ResearchSystemPrompt,
-		Tools:       a.GetTechnicalTools(),
+		Tools:       append(a.technicalTools, a.researchMCPTools...),
 	})
 	if err != nil {
 		return "", err
