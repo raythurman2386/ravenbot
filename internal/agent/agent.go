@@ -341,7 +341,7 @@ func NewAgent(ctx context.Context, cfg *config.Config, database *raven.DB) (*Age
 	// 6. Create Root ADK LLMAgents (One for Flash, one for Pro)
 	flashAgent, err := llmagent.New(llmagent.Config{
 		Name:                "ravenbot-flash",
-		Model:       a.flashLLM,
+		Model:               a.flashLLM,
 		Description:         "RavenBot Flash Agent",
 		InstructionProvider: instructionProvider,
 		Tools:               allRootTools,
@@ -353,7 +353,7 @@ func NewAgent(ctx context.Context, cfg *config.Config, database *raven.DB) (*Age
 
 	proAgent, err := llmagent.New(llmagent.Config{
 		Name:                "ravenbot-pro",
-		Model:       a.proLLM,
+		Model:               a.proLLM,
 		Description:         "RavenBot Pro Agent",
 		InstructionProvider: instructionProvider,
 		Tools:               allRootTools,
@@ -449,23 +449,7 @@ func (a *Agent) ClearSession(sessionID string) {
 // Heavily biased towards "Simple" to maximize the usage of the highly capable Flash model.
 // Includes retry logic with API key rotation on rate limit errors.
 func (a *Agent) classifyPrompt(ctx context.Context, message string) string {
-	prompt := fmt.Sprintf(`You are a highly efficient request classifier. Your goal is to maximize the use of the Flash model, which is extremely capable, reserving the Pro model ONLY for the most extreme reasoning cases.
-
-Classify as "Simple" (use Flash model) for:
-- ALMOST EVERYTHING: Greetings, general chat, and common questions.
-- Most coding tasks, debugging, and explanations.
-- Standard tool usage and single-step research.
-- Summarization and creative writing.
-- Any task where high speed and strong performance are desired.
-
-Classify as "Complex" (use Pro model) ONLY for:
-- Highly advanced multi-step logical proofs or complex scientific reasoning.
-- Deep, multi-file architectural code refactoring.
-- Tasks requiring the absolute maximum reasoning density available.
-
-User Input: "%s"
-
-Respond with ONLY "Simple" or "Complex". When in doubt, respond "Simple".`, message)
+	prompt := fmt.Sprintf(a.cfg.Bot.RoutingPrompt, message)
 
 	maxRetries := len(a.cfg.GeminiAPIKeys)
 	if maxRetries < 1 {

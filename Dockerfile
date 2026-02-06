@@ -41,7 +41,6 @@ RUN apk add --no-cache \
 
 # Pre-install MCP servers for performance
 RUN npm install -g @modelcontextprotocol/server-filesystem \
-    @cyanheads/git-mcp-server \
     @modelcontextprotocol/server-github \
     @modelcontextprotocol/server-memory \
     @modelcontextprotocol/server-sequential-thinking

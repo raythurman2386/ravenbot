@@ -31,8 +31,8 @@ This document provides structural and behavioral context for AI agents working o
 ## 🧠 Core Patterns
 
 ### 1. Flash-First Model Routing
-RavenBot uses a two-stage routing pattern implemented in `internal/agent/agent.go`:
-- **Classification**: Every user prompt is first sent to **Gemini 3 Flash** with a system prompt to classify it as "Simple" or "Complex".
+RavenBot uses a two-stage routing pattern with the classification prompt stored in `config.json`:
+- **Classification**: Every user prompt is first sent to **Gemini 3 Flash** with the prompt defined in `bot.routingPrompt` to classify it as "Simple" or "Complex".
 - **Execution**:
     - "Simple" requests are handled by the **Flash Runner** for low-latency chat.
     - "Complex" requests (reasoning, tool use, technical tasks) are routed to the **Pro Runner**.
@@ -49,7 +49,7 @@ RavenBot utilizes three active specialized sub-agents for distinct domains:
   - **Usage**: Invoked by `/status` or when system issues are detected.
 - **Jules**:
   - **Goal**: Coding, repository management, and GitHub interactions.
-  - **Tools**: `github_*`, `git_*`, and file operations.
+  - **Tools**: `github_*` and file operations.
   - **Usage**: Invoked explicitly via `/jules` or for complex coding requests.
 
 ### 3. Context Compression (Summarization)
@@ -62,7 +62,7 @@ To prevent context window overflow, the agent monitors token usage:
 Tools discovered from the active MCP servers are dynamically registered and prefixed with the server name.
 - **`memory_`**: Kept in the root agent to maintain personalized user context and history.
 - **`sysmetrics_`**: Delegated to the **SystemManager**.
-- **`github_` / `git_`**: Delegated to **Jules** for repository operations.
+- **`github_`**: Delegated to **Jules** for repository operations.
 - **`weather_` / `filesystem_`**: Generally available to the Pro Runner or specific sub-agents as needed.
 - **`sequentialthinking_`**: Available to the Pro Runner to enhance reasoning capabilities.
 

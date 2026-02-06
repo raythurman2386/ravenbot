@@ -57,10 +57,6 @@ To add an MCP server, create or edit `config.json` in the root directory:
       "command": "npx",
       "args": ["-y", "@modelcontextprotocol/server-filesystem", "/home/user/allowed/path"]
     },
-    "git": {
-      "command": "npx",
-      "args": ["-y", "@cyanheads/git-mcp-server"]
-    },
     "github": {
       "command": "npx",
       "args": ["-y", "@modelcontextprotocol/server-github"]
