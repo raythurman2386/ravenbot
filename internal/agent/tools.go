@@ -50,22 +50,6 @@ func (a *Agent) GetTechnicalTools() []tool.Tool {
 		technicalTools = append(technicalTools, scrapePageTool)
 	}
 
-	// ShellExecute Tool
-	shellExecutor := tools.NewShellExecutor(a.cfg.AllowedCommands)
-	type ShellExecuteArgs struct {
-		Command string   `json:"command" jsonschema:"The command to run (df, free, uptime, whoami, date, hostname, uname, ps, top, echo, ping)."`
-		Args    []string `json:"args,omitempty" jsonschema:"The arguments for the command."`
-	}
-	shellExecuteTool, err := functiontool.New(functiontool.Config{
-		Name:        "ShellExecute",
-		Description: "Executes restricted system diagnostic commands (df, free, uptime, ps, etc.). Use this for basic system health checks.",
-	}, func(ctx tool.Context, args ShellExecuteArgs) (string, error) {
-		return shellExecutor.Execute(ctx, args.Command, args.Args)
-	})
-	if err == nil {
-		technicalTools = append(technicalTools, shellExecuteTool)
-	}
-
 	// BrowseWeb Tool
 	type BrowseWebArgs struct {
 		URL string `json:"url" jsonschema:"The URL of the webpage to browse."`

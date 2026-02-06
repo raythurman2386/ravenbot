@@ -24,7 +24,7 @@ func TestGetRavenTools(t *testing.T) {
 	// Test Technical Tools
 	techTools := a.GetTechnicalTools()
 	assert.NotEmpty(t, techTools)
-	techNames := []string{"FetchRSS", "ScrapePage", "ShellExecute", "BrowseWeb", "WebSearch"}
+	techNames := []string{"FetchRSS", "ScrapePage", "BrowseWeb", "WebSearch"}
 	for _, name := range techNames {
 		found := false
 		for _, tool := range techTools {
