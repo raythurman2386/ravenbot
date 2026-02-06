@@ -151,6 +151,28 @@ func TestShellExecutor_Execute_Sanitization(t *testing.T) {
 	}
 }
 
+func TestShellExecutor_Execute_Truncation(t *testing.T) {
+	t.Parallel()
+	s := NewShellExecutor([]string{"echo"})
+	ctx := context.Background()
+
+	// Create a string larger than MaxOutputSize
+	largeString := strings.Repeat("a", MaxOutputSize+100)
+	output, err := s.Execute(ctx, "echo", []string{largeString})
+
+	if err != nil {
+		t.Errorf("Execute() error = %v", err)
+	}
+
+	if !strings.Contains(output, "[Output truncated due to size limit]") {
+		t.Errorf("Execute() output should contain truncation warning")
+	}
+
+	if len(output) > MaxOutputSize+len("\n\n[Output truncated due to size limit]")+1 { // +1 for newline from echo
+		t.Errorf("Execute() output size = %d, want <= %d", len(output), MaxOutputSize+len("\n\n[Output truncated due to size limit]")+1)
+	}
+}
+
 func TestShellExecutor_Execute_NotAllowed(t *testing.T) {
 	t.Parallel()
 	s := NewShellExecutor([]string{"echo"})

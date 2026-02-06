@@ -12,3 +12,8 @@
 **Vulnerability:** Multiple tools (`WebSearch`, `MCP SSE Client`) were using default `http.Client` instances, bypassing the SSRF protections implemented in the centralized `NewSafeClient`. Additionally, `NewSafeClient` lacked a default timeout, leading to potential resource exhaustion.
 **Learning:** Enforcing security at the factory level (`NewSafeClient`) is effective, but the factory must be flexible enough to handle different connection lifecycles. Applying a rigid timeout to all clients breaks streaming protocols like SSE.
 **Prevention:** Centralize all HTTP client creation through a secured factory that accepts configuration (like timeouts). Ensure that all outbound network-accessing tools use this factory rather than `http.DefaultClient` or manual `&http.Client{}` instantiation.
+
+## 2026-02-06 - Preventing Resource Exhaustion in Shell Execution
+**Vulnerability:** The `ShellExecute` tool lacked a limit on the amount of output it would read from a command. A command producing a large volume of data could cause an Out-of-Memory (OOM) crash, leading to a Denial of Service (DoS).
+**Learning:** Whitelisting commands and sanitizing arguments protects against injection, but not against resource abuse by the command itself. Even "safe" commands like `ps` or `echo` can produce massive output in certain environments or when triggered by a malicious model.
+**Prevention:** Implement an output size limit at the point of execution. Using a custom `io.Writer` that enforces a maximum capacity (e.g., 100KB) and truncates further input ensures that the application remains stable regardless of the command's output volume.

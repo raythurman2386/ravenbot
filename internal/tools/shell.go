@@ -1,11 +1,42 @@
 package tools
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"os/exec"
 	"strings"
 )
+
+// MaxOutputSize is the maximum allowed output size for a command (100KB).
+const MaxOutputSize = 100 * 1024
+
+// limitWriter is a helper that wraps a buffer and enforces a maximum size.
+type limitWriter struct {
+	buf       *bytes.Buffer
+	limit     int64
+	n         int64
+	truncated bool
+}
+
+func (lw *limitWriter) Write(p []byte) (int, error) {
+	if lw.n >= lw.limit {
+		lw.truncated = true
+		return len(p), nil
+	}
+
+	remaining := lw.limit - lw.n
+	if int64(len(p)) > remaining {
+		n, err := lw.buf.Write(p[:remaining])
+		lw.n += int64(n)
+		lw.truncated = true
+		return len(p), err
+	}
+
+	n, err := lw.buf.Write(p)
+	lw.n += int64(n)
+	return n, err
+}
 
 // DefaultAllowedCommands is the fallback whitelist if none is configured.
 var DefaultAllowedCommands = []string{
@@ -47,13 +78,25 @@ func (s *ShellExecutor) Execute(ctx context.Context, command string, args []stri
 		}
 	}
 
+	var buf bytes.Buffer
+	lw := &limitWriter{buf: &buf, limit: MaxOutputSize}
+
 	cmd := exec.CommandContext(ctx, command, args...)
-	output, err := cmd.CombinedOutput()
-	if err != nil {
-		return string(output), fmt.Errorf("execution failed: %w", err)
+	cmd.Stdout = lw
+	cmd.Stderr = lw
+
+	err := cmd.Run()
+	output := buf.String()
+
+	if lw.truncated {
+		output += "\n\n[Output truncated due to size limit]"
 	}
 
-	return string(output), nil
+	if err != nil {
+		return output, fmt.Errorf("execution failed: %w", err)
+	}
+
+	return output, nil
 }
 
 // IsAllowed checks if a command is in the whitelist.
