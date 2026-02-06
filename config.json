@@ -48,7 +48,10 @@
             "args": [
                 "-y",
                 "@modelcontextprotocol/server-memory"
-            ]
+            ],
+            "env": {
+                "MEMORY_FILE_PATH": "data/memory.json"
+            }
         },
         "weather": {
             "command": "goweathermcp",

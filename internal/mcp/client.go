@@ -8,6 +8,7 @@ import (
 	"io"
 	"log/slog"
 	"net/http"
+	"os"
 	"os/exec"
 	"time"
 
@@ -49,9 +50,18 @@ type StdioTransport struct {
 }
 
 // NewStdioClient creates a new client using stdio transport
-func NewStdioClient(command string, args []string) *Client {
+func NewStdioClient(command string, args []string, env map[string]string) *Client {
+	cmd := exec.Command(command, args...)
+	if len(env) > 0 {
+		cmd.Env = os.Environ()
+		for k, v := range env {
+			// Expand environment variables in the value (e.g., $HOME/data)
+			expandedValue := os.ExpandEnv(v)
+			cmd.Env = append(cmd.Env, fmt.Sprintf("%s=%s", k, expandedValue))
+		}
+	}
 	t := &StdioTransport{
-		cmd: exec.Command(command, args...),
+		cmd: cmd,
 	}
 	return &Client{
 		transport: t,

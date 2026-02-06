@@ -145,7 +145,7 @@ func NewAgent(ctx context.Context, cfg *config.Config, database *raven.DB) (*Age
 			if strings.HasPrefix(serverCfg.Command, "http://") || strings.HasPrefix(serverCfg.Command, "https://") {
 				mcpClient = mcp.NewSSEClient(serverCfg.Command)
 			} else {
-				mcpClient = mcp.NewStdioClient(serverCfg.Command, serverCfg.Args)
+				mcpClient = mcp.NewStdioClient(serverCfg.Command, serverCfg.Args, serverCfg.Env)
 			}
 
 			if err := mcpClient.Start(); err != nil {
