@@ -21,7 +21,20 @@ func TestGetRavenTools(t *testing.T) {
 
 	// Test Technical Tools
 	techTools := a.GetTechnicalTools()
-	assert.Empty(t, techTools, "Technical tools should be empty after removing GoogleSearch")
+	assert.NotEmpty(t, techTools, "Technical tools should not be empty")
+
+	// Verify specific tools
+	techNames := []string{"FetchRSS", "ScrapePage", "BrowseWeb", "WebSearch"}
+	for _, name := range techNames {
+		found := false
+		for _, tool := range techTools {
+			if tool.Name() == name {
+				found = true
+				break
+			}
+		}
+		assert.True(t, found, "Technical tool %s not found", name)
+	}
 
 	// Test Core Tools
 	coreTools := a.GetCoreTools()

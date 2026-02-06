@@ -17,10 +17,10 @@ This document provides structural and behavioral context for AI agents working o
 ├── internal/
 │   ├── agent/             # Core AI logic (Agent struct, Routing, Sub-agents)
 │   │   ├── agent.go       # ADK Agent initialization and model routing
-│   │   ├── tools.go       # Tool registration and MCP-to-ADK conversion
+│   │   ├── tools.go       # Tool registration (Core, Technical, MCP)
 │   │   └── report.go      # Markdown report generation logic
 │   ├── mcp/               # Custom MCP client (Stdio & SSE transports)
-│   ├── tools/             # Native tool implementations (Search, Browser, RSS, Shell)
+│   ├── tools/             # Native tool implementations (Search, Browser, RSS, Scraper)
 │   ├── db/                # SQLite persistence (Headlines, Briefings)
 │   ├── notifier/          # Telegram & Discord delivery systems
 │   └── config/            # Environment and JSON configuration loading
@@ -40,7 +40,7 @@ RavenBot uses a two-stage routing pattern implemented in `internal/agent/agent.g
 ### 2. ResearchAssistant Sub-Agent
 For deep-dive missions, RavenBot utilizes a specialized sub-agent:
 - **Lifecycle**: Created as a `llmagent` within the main Agent. It is also wrapped as an ADK tool (`ResearchAssistant`) that the root agent can call.
-- **Tools**: It has access to the full technical toolbelt (Search, Browse, Shell, MCP).
+- **Tools**: It has access to the full technical toolbelt (Search, Browse, RSS, Scrape) and relevant MCP tools.
 - **Isolation**: Each mission run is isolated with its own session lifecycle.
 
 ### 3. Context Compression (Summarization)

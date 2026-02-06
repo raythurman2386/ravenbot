@@ -13,6 +13,7 @@ import (
 	"github.com/raythurman2386/ravenbot/internal/config"
 	raven "github.com/raythurman2386/ravenbot/internal/db"
 	"github.com/raythurman2386/ravenbot/internal/mcp"
+	"github.com/raythurman2386/ravenbot/internal/tools"
 
 	"github.com/glebarez/sqlite"
 	"google.golang.org/adk/agent"
@@ -46,10 +47,11 @@ func getNextAPIKey(keys []string) string {
 }
 
 type Agent struct {
-	cfg        *config.Config
-	db         *raven.DB
-	mcpClients map[string]*mcp.Client
-	mu         sync.RWMutex
+	cfg            *config.Config
+	db             *raven.DB
+	mcpClients     map[string]*mcp.Client
+	browserManager *tools.BrowserManager
+	mu             sync.RWMutex
 
 	// ADK components - these store the current models but can be rotated
 	flashLLM model.LLM
@@ -120,11 +122,12 @@ func NewAgent(ctx context.Context, cfg *config.Config, database *raven.DB) (*Age
 	}
 
 	a := &Agent{
-		cfg:        cfg,
-		db:         database,
-		mcpClients: make(map[string]*mcp.Client),
-		flashLLM:   flashLLM,
-		proLLM:     proLLM,
+		cfg:            cfg,
+		db:             database,
+		mcpClients:     make(map[string]*mcp.Client),
+		flashLLM:       flashLLM,
+		proLLM:         proLLM,
+		browserManager: tools.NewBrowserManager(ctx),
 	}
 
 	// 3. Initialize MCP Servers
@@ -323,7 +326,7 @@ func NewAgent(ctx context.Context, cfg *config.Config, database *raven.DB) (*Age
 		return llmResponse, nil
 	}
 
-	// 5. Create Root ADK LLMAgents (One for Flash, one for Pro)
+	// 6. Create Root ADK LLMAgents (One for Flash, one for Pro)
 	flashAgent, err := llmagent.New(llmagent.Config{
 		Name:                "ravenbot-flash",
 		Model:               flashLLM,
@@ -348,7 +351,7 @@ func NewAgent(ctx context.Context, cfg *config.Config, database *raven.DB) (*Age
 		return nil, fmt.Errorf("failed to create pro agent: %w", err)
 	}
 
-	// 6. Create ADK Runners
+	// 7. Create ADK Runners
 	flashRunner, err := runner.New(runner.Config{
 		AppName:        AppName,
 		Agent:          flashAgent,
