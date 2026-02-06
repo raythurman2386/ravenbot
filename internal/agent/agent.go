@@ -215,10 +215,10 @@ func NewAgent(ctx context.Context, cfg *config.Config, database *raven.DB) (*Age
 		return nil, fmt.Errorf("failed to create ResearchAssistant: %w", err)
 	}
 
-	// Create System Manager Sub-Agent (Uses Pro Model)
+	// Create System Manager Sub-Agent (Uses Flash Model)
 	systemManagerAgent, err := llmagent.New(llmagent.Config{
 		Name:        "SystemManager",
-		Model:       proLLM,
+		Model:       flashLLM,
 		Description: "A specialized assistant for system diagnostics and health checks.",
 		Instruction: cfg.Bot.SystemManagerPrompt,
 		Tools:       systemManagerMCPTools,

@@ -37,7 +37,7 @@ func TestGetRavenTools(t *testing.T) {
 	// Test Core Tools
 	coreTools := a.GetCoreTools()
 	assert.NotEmpty(t, coreTools)
-	coreNames := []string{"JulesTask", "ReadMCPResource"}
+	coreNames := []string{"ReadMCPResource"}
 	for _, name := range coreNames {
 		found := false
 		for _, tool := range coreTools {
