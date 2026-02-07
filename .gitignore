@@ -16,3 +16,4 @@ data/*.db
 data/*.db-*
 data/*.db.bak
 data/test_*.db*
+data/*.jsonl
