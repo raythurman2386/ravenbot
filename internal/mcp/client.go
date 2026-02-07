@@ -263,9 +263,30 @@ func (c *Client) Start() error {
 
 // handleMessage processes a message from the transport
 func (c *Client) handleMessage(line []byte) {
-	// Try to parse as Response first (most common for us)
-	var resp Response
-	if err := json.Unmarshal(line, &resp); err == nil && resp.ID != 0 {
+	// Use a combined struct to avoid double unmarshalling
+	var msg struct {
+		JSONRPC string          `json:"jsonrpc"`
+		ID      *int64          `json:"id"`
+		Method  string          `json:"method"`
+		Params  json.RawMessage `json:"params"`
+		Result  json.RawMessage `json:"result"`
+		Error   *RPCError       `json:"error"`
+	}
+
+	if err := json.Unmarshal(line, &msg); err != nil {
+		slog.Warn("Failed to parse message", "error", err, "msg", string(line))
+		return
+	}
+
+	// Try to handle as Response first
+	if msg.ID != nil && *msg.ID != 0 {
+		resp := Response{
+			JSONRPC: msg.JSONRPC,
+			ID:      *msg.ID,
+			Result:  msg.Result,
+			Error:   msg.Error,
+		}
+
 		c.pendingMu.Lock()
 		ch, ok := c.pending[resp.ID]
 		if ok {
@@ -277,8 +298,13 @@ func (c *Client) handleMessage(line []byte) {
 	}
 
 	// Handle notifications
-	var notif Notification
-	if err := json.Unmarshal(line, &notif); err == nil && notif.Method != "" {
+	if msg.Method != "" {
+		notif := Notification{
+			JSONRPC: msg.JSONRPC,
+			Method:  msg.Method,
+			Params:  msg.Params,
+		}
+
 		c.notificationMu.RLock()
 		var handler func(Notification)
 		if c.notificationHandlers != nil {
