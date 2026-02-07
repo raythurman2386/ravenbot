@@ -461,7 +461,7 @@ func (a *Agent) classifyPrompt(ctx context.Context, message string) string {
 			}},
 		}, false)
 
-		var result string
+		var result strings.Builder
 		var rateLimited bool
 		for resp, err := range respIter {
 			if err != nil {
@@ -474,7 +474,7 @@ func (a *Agent) classifyPrompt(ctx context.Context, message string) string {
 				return "Simple" // Default to Flash on errors
 			}
 			if resp.Content != nil && len(resp.Content.Parts) > 0 {
-				result += resp.Content.Parts[0].Text
+				result.WriteString(resp.Content.Parts[0].Text)
 			}
 		}
 
@@ -486,8 +486,8 @@ func (a *Agent) classifyPrompt(ctx context.Context, message string) string {
 			continue
 		}
 
-		result = strings.TrimSpace(result)
-		if strings.EqualFold(result, "Complex") {
+		finalResult := strings.TrimSpace(result.String())
+		if strings.EqualFold(finalResult, "Complex") {
 			return "Complex"
 		}
 		return "Simple" // Default to Simple/Flash
