@@ -25,6 +25,27 @@ func ValidateURL(ctx context.Context, urlStr string) error {
 		return fmt.Errorf("empty host in URL")
 	}
 
+	// Port-based SSRF protection: block common sensitive internal ports.
+	if port := u.Port(); port != "" {
+		blockedPorts := map[string]bool{
+			"21":    true, // FTP
+			"22":    true, // SSH
+			"23":    true, // Telnet
+			"25":    true, // SMTP
+			"53":    true, // DNS
+			"110":   true, // POP3
+			"143":   true, // IMAP
+			"3306":  true, // MySQL
+			"5432":  true, // PostgreSQL
+			"6379":  true, // Redis
+			"9000":  true, // PHP-FPM / FastCGI
+			"27017": true, // MongoDB
+		}
+		if blockedPorts[port] {
+			return fmt.Errorf("restricted port: %s", port)
+		}
+	}
+
 	ips, err := net.DefaultResolver.LookupIP(ctx, "ip", host)
 	if err != nil {
 		return fmt.Errorf("resolve failed: %w", err)

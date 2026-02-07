@@ -16,6 +16,8 @@ import (
 	"github.com/raythurman2386/ravenbot/internal/stats"
 )
 
+const MaxInputLength = 10000
+
 // Handler owns all message routing, command handling, and job execution.
 type Handler struct {
 	bot       *agent.Agent
@@ -46,6 +48,13 @@ func New(bot *agent.Agent, database *db.DB, cfg *config.Config, s *stats.Stats, 
 func (h *Handler) HandleMessage(ctx context.Context, sessionID, text string, n notifier.Notifier, reply func(string)) {
 	text = strings.TrimSpace(text)
 	if text == "" {
+		return
+	}
+
+	// Security: Prevent DoS by limiting input length
+	if len(text) > MaxInputLength {
+		slog.Warn("Message rejected: too long", "sessionID", sessionID, "length", len(text))
+		reply(fmt.Sprintf("⚠️ Message too long (max %d characters). Please shorten your request.", MaxInputLength))
 		return
 	}
 
