@@ -67,6 +67,15 @@ func (db *DB) migrate() error {
 		summary TEXT NOT NULL,
 		updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 	);
+
+	CREATE TABLE IF NOT EXISTS reminders (
+		id INTEGER PRIMARY KEY AUTOINCREMENT,
+		session_id TEXT NOT NULL,
+		message TEXT NOT NULL,
+		remind_at TIMESTAMP NOT NULL,
+		delivered INTEGER DEFAULT 0,
+		created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+	);
 	`
 	_, err := db.Exec(schema)
 	return err
