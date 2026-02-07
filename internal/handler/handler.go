@@ -265,6 +265,9 @@ func (h *Handler) DeliverReminders(ctx context.Context) {
 		slog.Error("Failed to check reminders", "error", err)
 		return
 	}
+
+	deliveredIDs := make([]int64, 0, len(pending))
+
 	for _, r := range pending {
 		msg := fmt.Sprintf("⏰ **Reminder**: %s", r.Message)
 		delivered := false
@@ -286,9 +289,13 @@ func (h *Handler) DeliverReminders(ctx context.Context) {
 			}
 		}
 
-		if err := h.db.MarkReminderDelivered(ctx, r.ID); err != nil {
-			slog.Error("Failed to mark reminder delivered", "id", r.ID, "error", err)
-		}
+		deliveredIDs = append(deliveredIDs, r.ID)
 		slog.Info("Reminder delivered", "id", r.ID, "session", r.SessionID)
+	}
+
+	if len(deliveredIDs) > 0 {
+		if err := h.db.MarkRemindersDelivered(ctx, deliveredIDs); err != nil {
+			slog.Error("Failed to mark reminders delivered", "count", len(deliveredIDs), "error", err)
+		}
 	}
 }

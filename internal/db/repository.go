@@ -234,3 +234,33 @@ func (db *DB) MarkReminderDelivered(ctx context.Context, id int64) error {
 	}
 	return nil
 }
+
+// MarkRemindersDelivered marks multiple reminders as delivered in a single transaction.
+func (db *DB) MarkRemindersDelivered(ctx context.Context, ids []int64) error {
+	const batchSize = 500
+	if len(ids) == 0 {
+		return nil
+	}
+
+	for start := 0; start < len(ids); start += batchSize {
+		end := start + batchSize
+		if end > len(ids) {
+			end = len(ids)
+		}
+		chunk := ids[start:end]
+
+		placeholders := make([]string, len(chunk))
+		args := make([]interface{}, len(chunk))
+		for i, id := range chunk {
+			placeholders[i] = "?"
+			args[i] = id
+		}
+
+		query := fmt.Sprintf("UPDATE reminders SET delivered = 1 WHERE id IN (%s)", strings.Join(placeholders, ","))
+		_, err := db.ExecContext(ctx, query, args...)
+		if err != nil {
+			return fmt.Errorf("failed to mark reminders delivered (batch %d-%d): %w", start, end, err)
+		}
+	}
+	return nil
+}
