@@ -43,6 +43,7 @@ type Config struct {
 	DiscordBotToken  string
 	DiscordChannelID string
 	JulesAPIKey      string
+	DBPath           string                     `json:"dbPath"`
 	Bot              BotConfig                  `json:"bot"`
 	MCPServers       map[string]MCPServerConfig `json:"mcpServers"`
 	Jobs             []JobConfig                `json:"jobs"`
@@ -73,6 +74,7 @@ func LoadConfig() (*Config, error) {
 		DiscordBotToken:  os.Getenv("DISCORD_BOT_TOKEN"),
 		DiscordChannelID: os.Getenv("DISCORD_CHANNEL_ID"),
 		JulesAPIKey:      os.Getenv("JULES_API_KEY"),
+		DBPath:           "data/ravenbot.db",
 		Bot:              BotConfig{},
 	}
 

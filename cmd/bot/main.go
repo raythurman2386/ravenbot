@@ -9,6 +9,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/glebarez/sqlite"
 	"github.com/raythurman2386/cronlib"
 	"github.com/raythurman2386/ravenbot/internal/agent"
 	"github.com/raythurman2386/ravenbot/internal/config"
@@ -32,7 +33,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	database, err := db.InitDB("data/ravenbot.db")
+	database, err := db.InitDB(cfg.DBPath)
 	if err != nil {
 		slog.Error("Failed to initialize database", "error", err)
 		os.Exit(1)
@@ -43,7 +44,7 @@ func main() {
 		}
 	}()
 
-	bot, err := agent.NewAgent(ctx, cfg, database)
+	bot, err := agent.NewAgent(ctx, cfg, database, sqlite.Open(cfg.DBPath))
 	if err != nil {
 		slog.Error("Failed to create agent", "error", err)
 		os.Exit(1)

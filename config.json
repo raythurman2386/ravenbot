@@ -1,4 +1,5 @@
 {
+    "dbPath": "data/ravenbot.db",
     "bot": {
         "flashModel": "gemini-3-flash-preview",
         "proModel": "gemini-3-pro-preview",
