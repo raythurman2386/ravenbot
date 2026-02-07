@@ -146,6 +146,24 @@ func TestHandleMessage_EmptyText(t *testing.T) {
 	assert.False(t, called, "Reply should not be called for empty input")
 }
 
+func TestHandleMessage_TooLong(t *testing.T) {
+	t.Parallel()
+	h, database := newTestHandler(t)
+	defer func() { _ = database.Close() }()
+
+	longText := ""
+	for i := 0; i < MaxInputLength+1; i++ {
+		longText += "a"
+	}
+
+	var got string
+	h.HandleMessage(context.Background(), "test-session", longText, nil, func(reply string) {
+		got = reply
+	})
+
+	assert.Contains(t, got, "Message too long")
+}
+
 func TestHandleMessage_StatsIncrement(t *testing.T) {
 	t.Parallel()
 	h, database := newTestHandler(t)

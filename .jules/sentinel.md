@@ -12,3 +12,8 @@
 **Vulnerability:** Multiple tools (`WebSearch`, `MCP SSE Client`) were using default `http.Client` instances, bypassing the SSRF protections implemented in the centralized `NewSafeClient`. Additionally, `NewSafeClient` lacked a default timeout, leading to potential resource exhaustion.
 **Learning:** Enforcing security at the factory level (`NewSafeClient`) is effective, but the factory must be flexible enough to handle different connection lifecycles. Applying a rigid timeout to all clients breaks streaming protocols like SSE.
 **Prevention:** Centralize all HTTP client creation through a secured factory that accepts configuration (like timeouts). Ensure that all outbound network-accessing tools use this factory rather than `http.DefaultClient` or manual `&http.Client{}` instantiation.
+
+## 2025-02-12 - Defensive Hardening: Input Limits and Port Filtering
+**Vulnerability:** The bot lacked limits on user input length, creating a DoS risk. Additionally, SSRF protection focused on IP ranges but did not account for sensitive internal services on standard ports.
+**Learning:** Defense-in-depth requires addressing both application-level resource exhaustion and network-level lateral movement. Even if an IP is "public," specific ports (like 3306 or 6379) should never be accessed by a web scraper tool.
+**Prevention:** Enforce strict byte-length limits on all entry-point handlers. Enhance SSRF validation by implementing a port blacklist that blocks common internal infrastructure ports, even for otherwise valid hostnames.

@@ -19,6 +19,10 @@ func TestValidateURL(t *testing.T) {
 		{"Private IP range", "http://192.168.1.1", false, true},
 		{"Invalid scheme", "ftp://google.com", false, true},
 		{"Empty host", "http:///path", false, true},
+		{"Blocked port 22", "http://example.com:22", false, true},
+		{"Blocked port 3306", "http://example.com:3306", false, true},
+		{"Allowed port 8080", "http://example.com:8080", false, false},
+		{"IPv6 Loopback", "http://[::1]", false, true},
 		{"Allow local URLs", "http://127.0.0.1", true, false},
 	}
 
