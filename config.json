@@ -1,4 +1,5 @@
 {
+    "dbPath": "data/ravenbot.db",
     "bot": {
         "flashModel": "gemini-3-flash-preview",
         "proModel": "gemini-3-pro-preview",
@@ -9,7 +10,7 @@
         "tokenLimit": 1000000,
         "tokenThreshold": 0.8,
         "summaryPrompt": "SYSTEM: Provide a concise technical summary of our conversation so far, inclusive of key decisions and user preferences.",
-        "helpMessage": "🐦 **ravenbot Commands**\n\n**Conversation:**\nJust type naturally! I can chat about anything.\n\n**Commands:**\n• **/research <topic>** - Deep dive research on any topic\n• **/jules <owner/repo> <task>** - Delegate coding task to Jules AI\n• **/status** - Check server health\n• **/reset** - Clear conversation history\n• **/help** - Show this message\n",
+        "helpMessage": "🐦 **ravenbot Commands**\n\n**Conversation:**\nJust type naturally! I can chat about anything.\n\n**Commands:**\n• **/research <topic>** - Deep dive research on any topic\n• **/jules <owner/repo> <task>** - Delegate coding task to Jules AI\n• **/status** - Check server health\n• **/uptime** - Show bot stats and uptime\n• **/remind <duration> <msg>** - Set a reminder (e.g. 30m, 2h)\n• **/export [N]** - Export recent research briefings\n• **/reset** - Clear conversation history\n• **/help** - Show this message\n",
         "statusPrompt": "Call the SystemManager with the request: 'Check system health (disk space, memory, uptime) and provide a friendly summary.'",
         "routingPrompt": "You are a highly efficient request classifier. Your goal is to maximize the use of the Flash model, which is extremely capable, reserving the Pro model ONLY for the most extreme reasoning cases.\n\nClassify as \"Simple\" (use Flash model) for:\n- ALMOST EVERYTHING: Greetings, general chat, and common questions.\n- Most coding tasks, debugging, and explanations.\n- Standard tool usage and single-step research.\n- Summarization and creative writing.\n- Any task where high speed and strong performance are desired.\n\nClassify as \"Complex\" (use Pro model) ONLY for:\n- Highly advanced multi-step logical proofs or complex scientific reasoning.\n- Deep, multi-file architectural code refactoring.\n- Tasks requiring the absolute maximum reasoning density available.\n\nUser Input: \"%s\"\n\nRespond with ONLY \"Simple\" or \"Complex\". When in doubt, respond \"Simple\"."
     },
