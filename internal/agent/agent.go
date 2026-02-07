@@ -13,6 +13,7 @@ import (
 	"github.com/raythurman2386/ravenbot/internal/config"
 	raven "github.com/raythurman2386/ravenbot/internal/db"
 	"github.com/raythurman2386/ravenbot/internal/mcp"
+	"github.com/raythurman2386/ravenbot/internal/stats"
 	"github.com/raythurman2386/ravenbot/internal/tools"
 
 	"google.golang.org/adk/agent"
@@ -47,6 +48,7 @@ func getNextAPIKey(keys []string) string {
 type Agent struct {
 	cfg            *config.Config
 	db             *raven.DB
+	stats          *stats.Stats
 	mcpClients     map[string]*mcp.Client
 	browserManager *tools.BrowserManager
 	mu             sync.RWMutex
@@ -103,12 +105,13 @@ func (a *Agent) rotateModels(ctx context.Context) error {
 	return nil
 }
 
-func NewAgent(ctx context.Context, cfg *config.Config, database *raven.DB, dialector gorm.Dialector) (*Agent, error) {
+func NewAgent(ctx context.Context, cfg *config.Config, database *raven.DB, botStats *stats.Stats, dialector gorm.Dialector) (*Agent, error) {
 	slog.Info("Initializing agent with API key rotation", "num_keys", len(cfg.GeminiAPIKeys))
 
 	a := &Agent{
 		cfg:            cfg,
 		db:             database,
+		stats:          botStats,
 		mcpClients:     make(map[string]*mcp.Client),
 		browserManager: tools.NewBrowserManager(ctx),
 	}
@@ -628,6 +631,13 @@ func (a *Agent) consumeRunnerEvents(sessionID string, events iter.Seq2[*session.
 					lastText.WriteString(part.Text)
 				}
 			}
+		}
+		// Track token usage from every event
+		if a.stats != nil && event.UsageMetadata != nil {
+			a.stats.RecordTokens(
+				int64(event.UsageMetadata.PromptTokenCount),
+				int64(event.UsageMetadata.CandidatesTokenCount),
+			)
 		}
 	}
 

@@ -43,11 +43,56 @@ func TestSummary(t *testing.T) {
 	s := New()
 	s.RecordMessage()
 	s.RecordMission()
+	s.RecordTokens(1500, 500)
 
 	summary := s.Summary()
 	assert.Contains(t, summary, "RavenBot Stats")
 	assert.Contains(t, summary, "Messages Processed")
 	assert.Contains(t, summary, "Research Missions")
+	assert.Contains(t, summary, "Tokens Used")
+	assert.Contains(t, summary, "1,500 in")
+	assert.Contains(t, summary, "500 out")
+	assert.Contains(t, summary, "2,000 total")
+}
+
+func TestRecordTokens(t *testing.T) {
+	t.Parallel()
+	s := New()
+	assert.Equal(t, int64(0), s.InputTokens())
+	assert.Equal(t, int64(0), s.OutputTokens())
+
+	s.RecordTokens(100, 50)
+	s.RecordTokens(200, 75)
+
+	assert.Equal(t, int64(300), s.InputTokens())
+	assert.Equal(t, int64(125), s.OutputTokens())
+
+	// Negative values should be ignored
+	s.RecordTokens(-10, -5)
+	assert.Equal(t, int64(300), s.InputTokens())
+	assert.Equal(t, int64(125), s.OutputTokens())
+}
+
+func TestFormatNumber(t *testing.T) {
+	t.Parallel()
+	tests := []struct {
+		name     string
+		input    int64
+		expected string
+	}{
+		{"zero", 0, "0"},
+		{"small", 42, "42"},
+		{"hundreds", 999, "999"},
+		{"thousands", 1234, "1,234"},
+		{"millions", 1234567, "1,234,567"},
+		{"exact boundary", 1000, "1,000"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equal(t, tt.expected, formatNumber(tt.input))
+		})
+	}
 }
 
 func TestFormatDuration(t *testing.T) {

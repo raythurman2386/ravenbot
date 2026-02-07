@@ -44,14 +44,14 @@ func main() {
 		}
 	}()
 
-	bot, err := agent.NewAgent(ctx, cfg, database, sqlite.Open(cfg.DBPath))
+	scheduler := cronlib.NewCron()
+	botStats := stats.New()
+
+	bot, err := agent.NewAgent(ctx, cfg, database, botStats, sqlite.Open(cfg.DBPath))
 	if err != nil {
 		slog.Error("Failed to create agent", "error", err)
 		os.Exit(1)
 	}
-
-	scheduler := cronlib.NewCron()
-	botStats := stats.New()
 
 	// Initialize Notifiers
 	var notifiers []notifier.Notifier
