@@ -177,7 +177,7 @@ func NewAgent(ctx context.Context, cfg *config.Config, database *raven.DB, botSt
 	}
 	julesTaskTool, err := functiontool.New(functiontool.Config{
 		Name:        "JulesTask",
-		Description: "Delegates a coding task to the external Jules service.",
+		Description: "Delegates a coding task to the external Jules service. REQUIRED for any code modification, refactoring, or repository creation. Do not use github_* tools for these actions.",
 	}, func(ctx tool.Context, args JulesTaskArgs) (string, error) {
 		return tools.DelegateToJules(ctx, cfg.JulesAPIKey, args.Repo, args.Task)
 	})

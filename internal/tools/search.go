@@ -3,6 +3,8 @@ package tools
 import (
 	"context"
 	"fmt"
+	"io"
+	"math/rand"
 	"net/http"
 	"net/url"
 	"strings"
@@ -18,6 +20,19 @@ type SearchResult struct {
 	Snippet string `json:"snippet"`
 }
 
+var userAgents = []string{
+	"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36",
+	"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36",
+	"Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36",
+	"Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:122.0) Gecko/20100101 Firefox/122.0",
+	"Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:122.0) Gecko/20100101 Firefox/122.0",
+}
+
+// getRandomUserAgent returns a random User-Agent string
+func getRandomUserAgent() string {
+	return userAgents[rand.Intn(len(userAgents))]
+}
+
 // DuckDuckGoSearch performs a web search using DuckDuckGo's HTML interface.
 // This is a free, no-API-key solution that scrapes the lite HTML version.
 func DuckDuckGoSearch(ctx context.Context, query string, maxResults int) ([]SearchResult, error) {
@@ -31,66 +46,83 @@ func DuckDuckGoSearch(ctx context.Context, query string, maxResults int) ([]Sear
 	// Use the HTML version of DuckDuckGo (no JavaScript required)
 	searchURL := fmt.Sprintf("https://html.duckduckgo.com/html/?q=%s", url.QueryEscape(query))
 
-	req, err := http.NewRequestWithContext(ctx, "GET", searchURL, nil)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create request: %w", err)
-	}
-	// Updated headers to mimic a modern browser and avoid 202/403
-	req.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36")
-	req.Header.Set("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7")
-	req.Header.Set("Accept-Language", "en-US,en;q=0.9")
-	req.Header.Set("Referer", "https://duckduckgo.com/")
-	req.Header.Set("Upgrade-Insecure-Requests", "1")
-	req.Header.Set("Sec-Fetch-Dest", "document")
-	req.Header.Set("Sec-Fetch-Mode", "navigate")
-	req.Header.Set("Sec-Fetch-Site", "same-origin")
-	req.Header.Set("Sec-Fetch-User", "?1")
-
 	client := NewSafeClient(30 * time.Second)
 	var resp *http.Response
+	var err error
 
-	// Retry loop for handling 202 Accepted or temporary failures
-	for i := 0; i < 3; i++ {
+	// Add a small initial jitter to avoid bursty behavior
+	time.Sleep(time.Duration(rand.Intn(500)+100) * time.Millisecond)
+
+	// Retry loop for handling 202 Accepted, 429 Too Many Requests, 403 Forbidden, or temporary failures
+	maxRetries := 3
+	for i := 0; i < maxRetries; i++ {
+		var req *http.Request
+		req, err = http.NewRequestWithContext(ctx, "GET", searchURL, nil)
+		if err != nil {
+			return nil, fmt.Errorf("failed to create request: %w", err)
+		}
+
+		// Rotate User-Agent
+		req.Header.Set("User-Agent", getRandomUserAgent())
+		req.Header.Set("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7")
+		req.Header.Set("Accept-Language", "en-US,en;q=0.9")
+		req.Header.Set("Referer", "https://duckduckgo.com/")
+		req.Header.Set("Upgrade-Insecure-Requests", "1")
+		req.Header.Set("Sec-Fetch-Dest", "document")
+		req.Header.Set("Sec-Fetch-Mode", "navigate")
+		req.Header.Set("Sec-Fetch-Site", "same-origin")
+		req.Header.Set("Sec-Fetch-User", "?1")
+
 		if i > 0 {
+			// Exponential backoff: 1s, 2s, 4s...
+			backoff := time.Duration(1<<i) * time.Second
 			select {
 			case <-ctx.Done():
 				return nil, ctx.Err()
-			case <-time.After(1 * time.Second):
+			case <-time.After(backoff):
 				// Backoff before retry
 			}
 		}
 
 		resp, err = client.Do(req)
 		if err != nil {
-			return nil, fmt.Errorf("failed to fetch search results: %w", err)
-		}
-
-		if resp.StatusCode == http.StatusOK {
-			break
-		}
-
-		// If 202 Accepted, close body and retry
-		if resp.StatusCode == http.StatusAccepted {
-			_ = resp.Body.Close()
+			// If it's a network error, check if we should retry
+			if i == maxRetries-1 {
+				return nil, fmt.Errorf("failed to fetch search results after retries: %w", err)
+			}
 			continue
 		}
 
-		// For other non-200 codes, stop and return error (or maybe retry 5xx?)
-		// For now, only retry 202 as that's the specific DDG issue.
-		// We handle the error checking after the loop breaks.
-		break
-	}
+		if resp.StatusCode == http.StatusOK {
+			// Success! Parse and return.
+			defer resp.Body.Close()
+			return parseDDGResults(resp.Body, maxResults, query)
+		}
 
-	if resp == nil {
-		return nil, fmt.Errorf("failed to get response")
-	}
-	defer func() { _ = resp.Body.Close() }()
+		// Handle specific retryable codes
+		if resp.StatusCode == http.StatusAccepted || resp.StatusCode == http.StatusTooManyRequests || resp.StatusCode == http.StatusForbidden {
+			resp.Body.Close()
+			continue
+		}
 
-	if resp.StatusCode != http.StatusOK {
+		// For other non-200 codes, stop and return error
+		resp.Body.Close()
 		return nil, fmt.Errorf("bad status code: %d", resp.StatusCode)
 	}
 
-	doc, err := goquery.NewDocumentFromReader(resp.Body)
+	// If we exhausted retries without success or error return inside loop
+	if err != nil {
+		return nil, fmt.Errorf("search failed: %w", err)
+	}
+	if resp != nil {
+		return nil, fmt.Errorf("search failed with status code: %d", resp.StatusCode)
+	}
+
+	return nil, fmt.Errorf("search failed: unknown error")
+}
+
+func parseDDGResults(body io.Reader, maxResults int, query string) ([]SearchResult, error) {
+	doc, err := goquery.NewDocumentFromReader(body)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse HTML: %w", err)
 	}
