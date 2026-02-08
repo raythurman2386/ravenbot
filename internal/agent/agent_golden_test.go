@@ -33,11 +33,11 @@ func TestChat_Golden(t *testing.T) {
 
 	// 2. Setup ADK Components
 	cfg := &config.Config{
-		GCPProject:  "test-project",
-		GCPLocation: "us-central1",
+		GCPProject:       "test-project",
+		GCPLocation:      "us-central1",
+		VertexFlashModel: "mock-flash",
+		VertexProModel:   "mock-pro",
 		Bot: config.BotConfig{
-			FlashModel:   "mock-flash",
-			ProModel:     "mock-pro",
 			SystemPrompt: "You are a test bot.",
 		},
 	}

@@ -22,13 +22,12 @@ type JobConfig struct {
 }
 
 type BotConfig struct {
-	FlashModel           string  `json:"flashModel"`
-	ProModel             string  `json:"proModel"`
 	SystemPrompt         string  `json:"systemPrompt"`
 	ResearchSystemPrompt string  `json:"researchSystemPrompt"`
 	SystemManagerPrompt  string  `json:"systemManagerPrompt"`
 	JulesPrompt          string  `json:"julesPrompt"`
-	TokenLimit           int64   `json:"tokenLimit"`
+	FlashTokenLimit      int64   `json:"flashTokenLimit"`
+	ProTokenLimit        int64   `json:"proTokenLimit"`
 	TokenThreshold       float64 `json:"tokenThreshold"`
 	SummaryPrompt        string  `json:"summaryPrompt"`
 	HelpMessage          string  `json:"helpMessage"`
@@ -47,8 +46,10 @@ type Config struct {
 	AIBackend string
 
 	// Vertex AI settings (required when AIBackend == "vertex")
-	GCPProject  string
-	GCPLocation string
+	GCPProject       string
+	GCPLocation      string
+	VertexFlashModel string
+	VertexProModel   string
 
 	// Ollama settings (used when AIBackend == "ollama")
 	OllamaBaseURL    string
@@ -98,6 +99,20 @@ func LoadConfig() (*Config, error) {
 		if cfg.GCPLocation == "" {
 			cfg.GCPLocation = "us-central1"
 		}
+		cfg.VertexFlashModel = os.Getenv("VERTEX_FLASH_MODEL")
+		if cfg.VertexFlashModel == "" {
+			cfg.VertexFlashModel = os.Getenv("FLASH_MODEL") // Legacy support
+		}
+		if cfg.VertexFlashModel == "" {
+			cfg.VertexFlashModel = "gemini-3.0-flash-preview"
+		}
+		cfg.VertexProModel = os.Getenv("VERTEX_PRO_MODEL")
+		if cfg.VertexProModel == "" {
+			cfg.VertexProModel = os.Getenv("PRO_MODEL") // Legacy support
+		}
+		if cfg.VertexProModel == "" {
+			cfg.VertexProModel = "gemini-3.0-pro-preview"
+		}
 	case BackendOllama:
 		cfg.OllamaBaseURL = os.Getenv("OLLAMA_BASE_URL")
 		cfg.OllamaModel = os.Getenv("OLLAMA_MODEL")
@@ -121,6 +136,14 @@ func LoadConfig() (*Config, error) {
 		slog.Info("Loaded configuration from config.json")
 	} else {
 		slog.Warn("No config.json found, relying on environment variables only")
+	}
+
+	// Set defaults if still zero
+	if cfg.Bot.FlashTokenLimit <= 0 {
+		cfg.Bot.FlashTokenLimit = 1000000 // Default to 1M
+	}
+	if cfg.Bot.ProTokenLimit <= 0 {
+		cfg.Bot.ProTokenLimit = 1000000 // Default to 1M
 	}
 
 	// Optional configurations for notifiers

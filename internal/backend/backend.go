@@ -47,7 +47,7 @@ func resolveOllamaBaseURL(url string) string {
 func NewFlashModel(ctx context.Context, cfg *config.Config) (model.LLM, error) {
 	switch cfg.AIBackend {
 	case config.BackendVertex:
-		return gemini.NewModel(ctx, cfg.Bot.FlashModel, vertexClientConfig(cfg))
+		return gemini.NewModel(ctx, cfg.VertexFlashModel, vertexClientConfig(cfg))
 	case config.BackendOllama:
 		modelName := resolveOllamaModel(cfg.OllamaFlashModel, cfg.OllamaModel)
 		return ollama.New(
@@ -63,7 +63,7 @@ func NewFlashModel(ctx context.Context, cfg *config.Config) (model.LLM, error) {
 func NewProModel(ctx context.Context, cfg *config.Config) (model.LLM, error) {
 	switch cfg.AIBackend {
 	case config.BackendVertex:
-		return gemini.NewModel(ctx, cfg.Bot.ProModel, vertexClientConfig(cfg))
+		return gemini.NewModel(ctx, cfg.VertexProModel, vertexClientConfig(cfg))
 	case config.BackendOllama:
 		modelName := resolveOllamaModel(cfg.OllamaProModel, cfg.OllamaModel)
 		return ollama.New(

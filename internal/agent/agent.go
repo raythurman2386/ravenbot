@@ -260,22 +260,24 @@ func NewAgent(ctx context.Context, cfg *config.Config, database *raven.DB, botSt
 		return a.cfg.Bot.SystemPrompt, nil
 	}
 
-	// Callback for context compression
-	afterModelCallback := func(ctx agent.CallbackContext, llmResponse *model.LLMResponse, llmResponseError error) (*model.LLMResponse, error) {
-		if llmResponseError != nil || llmResponse == nil || llmResponse.UsageMetadata == nil {
-			return llmResponse, llmResponseError
+	// Callback factory for context compression
+	makeCompressionCallback := func(limit int64) llmagent.AfterModelCallback {
+		return func(ctx agent.CallbackContext, llmResponse *model.LLMResponse, llmResponseError error) (*model.LLMResponse, error) {
+			if llmResponseError != nil || llmResponse == nil || llmResponse.UsageMetadata == nil {
+				return llmResponse, llmResponseError
+			}
+
+			// Check if context needs compression
+			totalTokens := llmResponse.UsageMetadata.TotalTokenCount
+			threshold := float64(limit) * a.cfg.Bot.TokenThreshold
+
+			if float64(totalTokens) >= threshold {
+				slog.Info("Context window threshold reached, triggering compression", "sessionID", ctx.SessionID(), "tokens", totalTokens, "limit", limit)
+				go a.compressContext(ctx.SessionID())
+			}
+
+			return llmResponse, nil
 		}
-
-		// Check if context needs compression
-		totalTokens := llmResponse.UsageMetadata.TotalTokenCount
-		threshold := float64(a.cfg.Bot.TokenLimit) * a.cfg.Bot.TokenThreshold
-
-		if float64(totalTokens) >= threshold {
-			slog.Info("Context window threshold reached, triggering compression", "sessionID", ctx.SessionID(), "tokens", totalTokens)
-			go a.compressContext(ctx.SessionID())
-		}
-
-		return llmResponse, nil
 	}
 
 	// 6. Create Root ADK LLMAgents (One for Flash, one for Pro)
@@ -285,7 +287,7 @@ func NewAgent(ctx context.Context, cfg *config.Config, database *raven.DB, botSt
 		Description:         "RavenBot Flash Agent",
 		InstructionProvider: instructionProvider,
 		Tools:               allRootTools,
-		AfterModelCallbacks: []llmagent.AfterModelCallback{afterModelCallback},
+		AfterModelCallbacks: []llmagent.AfterModelCallback{makeCompressionCallback(a.cfg.Bot.FlashTokenLimit)},
 	})
 	if err != nil {
 		return nil, fmt.Errorf("failed to create flash agent: %w", err)
@@ -297,7 +299,7 @@ func NewAgent(ctx context.Context, cfg *config.Config, database *raven.DB, botSt
 		Description:         "RavenBot Pro Agent",
 		InstructionProvider: instructionProvider,
 		Tools:               allRootTools,
-		AfterModelCallbacks: []llmagent.AfterModelCallback{afterModelCallback},
+		AfterModelCallbacks: []llmagent.AfterModelCallback{makeCompressionCallback(a.cfg.Bot.ProTokenLimit)},
 	})
 	if err != nil {
 		return nil, fmt.Errorf("failed to create pro agent: %w", err)
@@ -446,10 +448,10 @@ func (a *Agent) Chat(ctx context.Context, sessionID, message string) (string, er
 
 	if classification == "Simple" {
 		activeRunner = a.flashRunner
-		modelName = a.cfg.Bot.FlashModel
+		modelName = a.cfg.VertexFlashModel
 	} else {
 		activeRunner = a.proRunner
-		modelName = a.cfg.Bot.ProModel
+		modelName = a.cfg.VertexProModel
 	}
 
 	slog.Info("Routed request", "classification", classification, "model", modelName)
