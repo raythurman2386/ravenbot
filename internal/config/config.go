@@ -37,19 +37,18 @@ type BotConfig struct {
 
 // Supported AI backend values.
 const (
-	BackendVertex = "vertex"
+	BackendGemini = "gemini"
 	BackendOllama = "ollama"
 )
 
 type Config struct {
-	// AI Backend selection ("vertex" or "ollama")
+	// AI Backend selection ("gemini" or "ollama")
 	AIBackend string
 
-	// Vertex AI settings (required when AIBackend == "vertex")
-	GCPProject       string
-	GCPLocation      string
-	VertexFlashModel string
-	VertexProModel   string
+	// Google AI (Gemini) settings
+	GeminiAPIKey     string
+	GeminiFlashModel string
+	GeminiProModel   string
 
 	// Ollama settings (used when AIBackend == "ollama")
 	OllamaBaseURL    string
@@ -72,10 +71,10 @@ type Config struct {
 func LoadConfig() (*Config, error) {
 	backend := strings.ToLower(os.Getenv("AI_BACKEND"))
 	if backend == "" {
-		backend = BackendVertex
+		backend = BackendGemini
 	}
-	if backend != BackendVertex && backend != BackendOllama {
-		return nil, fmt.Errorf("unsupported AI_BACKEND %q: must be %q or %q", backend, BackendVertex, BackendOllama)
+	if backend != BackendGemini && backend != BackendOllama {
+		return nil, fmt.Errorf("unsupported AI_BACKEND %q: must be %q or %q", backend, BackendGemini, BackendOllama)
 	}
 
 	cfg := &Config{
@@ -84,34 +83,30 @@ func LoadConfig() (*Config, error) {
 		DiscordBotToken:  os.Getenv("DISCORD_BOT_TOKEN"),
 		DiscordChannelID: os.Getenv("DISCORD_CHANNEL_ID"),
 		JulesAPIKey:      os.Getenv("JULES_API_KEY"),
+		GeminiAPIKey:     os.Getenv("GEMINI_API_KEY"),
 		DBPath:           "data/ravenbot.db",
 		Bot:              BotConfig{},
 	}
 
 	// Backend-specific configuration
 	switch backend {
-	case BackendVertex:
-		cfg.GCPProject = os.Getenv("GCP_PROJECT")
-		if cfg.GCPProject == "" {
-			return nil, fmt.Errorf("GCP_PROJECT environment variable is required when AI_BACKEND=%s", BackendVertex)
+	case BackendGemini:
+		if cfg.GeminiAPIKey == "" {
+			return nil, fmt.Errorf("GEMINI_API_KEY environment variable is required when AI_BACKEND=%s", BackendGemini)
 		}
-		cfg.GCPLocation = os.Getenv("GCP_LOCATION")
-		if cfg.GCPLocation == "" {
-			cfg.GCPLocation = "us-central1"
+		cfg.GeminiFlashModel = os.Getenv("GEMINI_FLASH_MODEL")
+		if cfg.GeminiFlashModel == "" {
+			cfg.GeminiFlashModel = os.Getenv("FLASH_MODEL")
 		}
-		cfg.VertexFlashModel = os.Getenv("VERTEX_FLASH_MODEL")
-		if cfg.VertexFlashModel == "" {
-			cfg.VertexFlashModel = os.Getenv("FLASH_MODEL") // Legacy support
+		if cfg.GeminiFlashModel == "" {
+			cfg.GeminiFlashModel = "gemini-3.0-flash-preview"
 		}
-		if cfg.VertexFlashModel == "" {
-			cfg.VertexFlashModel = "gemini-3.0-flash-preview"
+		cfg.GeminiProModel = os.Getenv("GEMINI_PRO_MODEL")
+		if cfg.GeminiProModel == "" {
+			cfg.GeminiProModel = os.Getenv("PRO_MODEL")
 		}
-		cfg.VertexProModel = os.Getenv("VERTEX_PRO_MODEL")
-		if cfg.VertexProModel == "" {
-			cfg.VertexProModel = os.Getenv("PRO_MODEL") // Legacy support
-		}
-		if cfg.VertexProModel == "" {
-			cfg.VertexProModel = "gemini-3.0-pro-preview"
+		if cfg.GeminiProModel == "" {
+			cfg.GeminiProModel = "gemini-3.0-pro-preview"
 		}
 	case BackendOllama:
 		cfg.OllamaBaseURL = os.Getenv("OLLAMA_BASE_URL")

@@ -197,51 +197,8 @@ func NewAgent(ctx context.Context, cfg *config.Config, database *raven.DB, botSt
 		return nil, fmt.Errorf("failed to create Jules agent: %w", err)
 	}
 
-	// Wrap Research Assistant as a Tool
-	type ResearchAssistantArgs struct {
-		Request string `json:"request" jsonschema:"The technical research request."`
-	}
-	researchTool, err := functiontool.New(functiontool.Config{
-		Name:        "ResearchAssistant",
-		Description: "A specialized assistant for technical research.",
-	}, func(ctx tool.Context, args ResearchAssistantArgs) (map[string]any, error) {
-		return a.runSubAgent(ctx, sessionService, researchAssistant, "ResearchAssistant", args.Request)
-	})
-	if err != nil {
-		return nil, fmt.Errorf("failed to create research tool: %w", err)
-	}
-
-	// Wrap System Manager as a Tool
-	type SystemManagerArgs struct {
-		Request string `json:"request" jsonschema:"The system diagnostic request."`
-	}
-	systemManagerTool, err := functiontool.New(functiontool.Config{
-		Name:        "SystemManager",
-		Description: "A specialized assistant for system diagnostics and health checks.",
-	}, func(ctx tool.Context, args SystemManagerArgs) (map[string]any, error) {
-		return a.runSubAgent(ctx, sessionService, systemManagerAgent, "SystemManager", args.Request)
-	})
-	if err != nil {
-		return nil, fmt.Errorf("failed to create system manager tool: %w", err)
-	}
-
-	// Wrap Jules as a Tool
-	type JulesArgs struct {
-		Request string `json:"request" jsonschema:"The coding or GitHub task to perform."`
-	}
-	julesTool, err := functiontool.New(functiontool.Config{
-		Name:        "Jules",
-		Description: "A specialized AI software engineer for coding tasks and GitHub operations.",
-	}, func(ctx tool.Context, args JulesArgs) (map[string]any, error) {
-		return a.runSubAgent(ctx, sessionService, julesAgent, "Jules", args.Request)
-	})
-	if err != nil {
-		return nil, fmt.Errorf("failed to create Jules tool: %w", err)
-	}
-
 	// Final toolset for the Root Agent
 	allRootTools := append(coreTools, rootMCPTools...)
-	allRootTools = append(allRootTools, researchTool, systemManagerTool, julesTool)
 
 	// Instruction provider logic
 	instructionProvider := func(ctx agent.ReadonlyContext) (string, error) {
@@ -287,6 +244,7 @@ func NewAgent(ctx context.Context, cfg *config.Config, database *raven.DB, botSt
 		Description:         "RavenBot Flash Agent",
 		InstructionProvider: instructionProvider,
 		Tools:               allRootTools,
+		SubAgents:           []agent.Agent{researchAssistant, systemManagerAgent, julesAgent},
 		AfterModelCallbacks: []llmagent.AfterModelCallback{makeCompressionCallback(a.cfg.Bot.FlashTokenLimit)},
 	})
 	if err != nil {
@@ -299,6 +257,7 @@ func NewAgent(ctx context.Context, cfg *config.Config, database *raven.DB, botSt
 		Description:         "RavenBot Pro Agent",
 		InstructionProvider: instructionProvider,
 		Tools:               allRootTools,
+		SubAgents:           []agent.Agent{researchAssistant, systemManagerAgent, julesAgent},
 		AfterModelCallbacks: []llmagent.AfterModelCallback{makeCompressionCallback(a.cfg.Bot.ProTokenLimit)},
 	})
 	if err != nil {
@@ -448,10 +407,10 @@ func (a *Agent) Chat(ctx context.Context, sessionID, message string) (string, er
 
 	if classification == "Simple" {
 		activeRunner = a.flashRunner
-		modelName = a.cfg.VertexFlashModel
+		modelName = a.cfg.GeminiFlashModel
 	} else {
 		activeRunner = a.proRunner
-		modelName = a.cfg.VertexProModel
+		modelName = a.cfg.GeminiProModel
 	}
 
 	slog.Info("Routed request", "classification", classification, "model", modelName)

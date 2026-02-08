@@ -6,10 +6,10 @@ This document provides structural and behavioral context for AI agents working o
 - **Language**: Go 1.25.6
 - **AI Framework**: Google Agent Development Kit (ADK) `google.golang.org/adk`
 - **AI Backend**: Pluggable via `AI_BACKEND` env var:
-  - `vertex` (default): Google Cloud Vertex AI (`genai.BackendVertexAI`) with Application Default Credentials
+  - `gemini` (default): Google AI (`genai.BackendGoogleAI`) using API Key.
   - `ollama`: Local/remote Ollama via OpenAI-compatible API (`internal/ollama`)
 - **Backend Factory**: `internal/backend` — creates `model.LLM` instances based on config; the agent never imports `gemini` or `ollama` directly
-- **Generative AI**: `google.golang.org/genai` (Gemini 3 Pro & Flash for Vertex AI, any compatible model for Ollama)
+- **Generative AI**: `google.golang.org/genai` (Gemini 3.0 Pro & Flash for Google AI, any compatible model for Ollama)
 - **Database**: SQLite via `modernc.org/sqlite` (CGO-free)
 - **Networking**: Custom safe HTTP client with SSRF protection in `internal/tools/validator.go`
 - **Browsing**: Headless Chrome via `github.com/chromedp/chromedp`
@@ -23,7 +23,7 @@ This document provides structural and behavioral context for AI agents working o
 │   │   ├── agent.go       # ADK Agent initialization and model routing
 │   │   ├── tools.go       # Tool registration (Core, Technical, MCP)
 │   │   └── report.go      # Markdown report generation logic
-│   ├── backend/           # Backend factory (Vertex AI or Ollama) for model.LLM
+│   ├── backend/           # Backend factory (Gemini in Google AI or Ollama) for model.LLM
 │   ├── ollama/            # Ollama adapter (OpenAI-compatible API → model.LLM)
 │   ├── mcp/               # Custom MCP client (Stdio & SSE transports)
 │   ├── tools/             # Native tool implementations (Search, Browser, RSS, Scraper)

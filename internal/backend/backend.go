@@ -1,5 +1,5 @@
 // Package backend provides a factory for creating model.LLM instances
-// based on the configured AI backend (Vertex AI or Ollama).
+// based on the configured AI backend (Google AI or Ollama).
 package backend
 
 import (
@@ -14,12 +14,10 @@ import (
 	"google.golang.org/genai"
 )
 
-// vertexClientConfig builds the genai.ClientConfig for Vertex AI.
-func vertexClientConfig(cfg *config.Config) *genai.ClientConfig {
+// geminiClientConfig builds the genai.ClientConfig for Google AI (Gemini).
+func geminiClientConfig(cfg *config.Config) *genai.ClientConfig {
 	return &genai.ClientConfig{
-		Backend:  genai.BackendVertexAI,
-		Project:  cfg.GCPProject,
-		Location: cfg.GCPLocation,
+		APIKey: cfg.GeminiAPIKey,
 	}
 }
 
@@ -46,8 +44,8 @@ func resolveOllamaBaseURL(url string) string {
 // NewFlashModel creates a Flash-tier model.LLM based on the configured backend.
 func NewFlashModel(ctx context.Context, cfg *config.Config) (model.LLM, error) {
 	switch cfg.AIBackend {
-	case config.BackendVertex:
-		return gemini.NewModel(ctx, cfg.VertexFlashModel, vertexClientConfig(cfg))
+	case config.BackendGemini:
+		return gemini.NewModel(ctx, cfg.GeminiFlashModel, geminiClientConfig(cfg))
 	case config.BackendOllama:
 		modelName := resolveOllamaModel(cfg.OllamaFlashModel, cfg.OllamaModel)
 		return ollama.New(
@@ -62,8 +60,8 @@ func NewFlashModel(ctx context.Context, cfg *config.Config) (model.LLM, error) {
 // NewProModel creates a Pro-tier model.LLM based on the configured backend.
 func NewProModel(ctx context.Context, cfg *config.Config) (model.LLM, error) {
 	switch cfg.AIBackend {
-	case config.BackendVertex:
-		return gemini.NewModel(ctx, cfg.VertexProModel, vertexClientConfig(cfg))
+	case config.BackendGemini:
+		return gemini.NewModel(ctx, cfg.GeminiProModel, geminiClientConfig(cfg))
 	case config.BackendOllama:
 		modelName := resolveOllamaModel(cfg.OllamaProModel, cfg.OllamaModel)
 		return ollama.New(

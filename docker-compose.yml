@@ -5,10 +5,10 @@ services:
     extra_hosts:
       - "host.docker.internal:host-gateway"
     environment:
-      - AI_BACKEND=${AI_BACKEND:-vertex}
-      - GCP_PROJECT=${GCP_PROJECT}
-      - GCP_LOCATION=${GCP_LOCATION:-us-central1}
-      - GOOGLE_APPLICATION_CREDENTIALS=/app/credentials/application_default_credentials.json
+      - AI_BACKEND=${AI_BACKEND:-gemini}
+      - GEMINI_API_KEY=${GEMINI_API_KEY}
+      - GEMINI_FLASH_MODEL=${GEMINI_FLASH_MODEL}
+      - GEMINI_PRO_MODEL=${GEMINI_PRO_MODEL}
       - OLLAMA_BASE_URL=${OLLAMA_BASE_URL:-http://host.docker.internal:11434/v1}
       - OLLAMA_MODEL=${OLLAMA_MODEL}
       - OLLAMA_FLASH_MODEL=${OLLAMA_FLASH_MODEL}
@@ -27,7 +27,6 @@ services:
       - .:/src
       - ./daily_logs:/app/daily_logs
       - ./data:/app/data
-      - ~/.config/gcloud/application_default_credentials.json:/app/credentials/application_default_credentials.json:ro
       - /usr/local/bin/goweathermcp:/usr/local/bin/goweathermcp
       - /usr/local/bin/sysmetrics-mcp:/usr/local/bin/sysmetrics-mcp
       - /var/run/docker.sock:/var/run/docker.sock

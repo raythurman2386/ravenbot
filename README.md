@@ -48,8 +48,8 @@ ravenbot supports the **Model Context Protocol (MCP)**, allowing it to seamlessl
 
 - **Core**: Go 1.25.6
 - **Framework**: [google.golang.org/adk](https://pkg.go.dev/google.golang.org/adk) (v0.4.0)
-- **AI Backend**: Pluggable — **Google Vertex AI** or **Ollama** (selected via `AI_BACKEND` env var)
-- **AI Models**: Gemini 3 Pro & Flash (Vertex AI) or any Ollama-compatible model (e.g., Qwen, Llama)
+- **AI Backend**: Pluggable — **Google AI (Gemini)** or **Ollama** (selected via `AI_BACKEND` env var)
+- **AI Models**: Gemini 3.0 Pro & Flash (Google AI) or any Ollama-compatible model (e.g., Qwen, Llama)
 - **Scheduler**: [github.com/raythurman2386/cronlib](https://github.com/raythurman2386/cronlib)
 - **Browser**: `chromedp` (v0.14.2)
 - **Database**: `modernc.org/sqlite` (v1.44.3)
@@ -61,7 +61,7 @@ ravenbot supports the **Model Context Protocol (MCP)**, allowing it to seamlessl
 
 ### 1. Prerequisites
 - Docker & Docker Compose
-- **For Vertex AI backend**: GCP Project with the Vertex AI API enabled + Service Account key (JSON)
+- **For Gemini backend**: Get an API Key from [Google AI Studio](https://aistudio.google.com/)
 - **For Ollama backend**: A running [Ollama](https://ollama.com/) instance (local or remote)
 - (Optional) Telegram/Discord Bot Tokens
 - (Optional) Jules Agent API Key
@@ -96,9 +96,8 @@ docker compose up -d --build
 ### Environment Variables (.env)
 | Variable | Description |
 |----------|-------------|
-| `AI_BACKEND` | AI backend to use: `vertex` (default) or `ollama`. |
-| `GCP_PROJECT` | **Required for Vertex AI**. Your Google Cloud project ID. |
-| `GCP_LOCATION` | GCP region for Vertex AI (default: `us-central1`). |
+| `AI_BACKEND` | AI backend to use: `gemini` (default) or `ollama`. |
+| `GEMINI_API_KEY` | **Required for Gemini**. Your Google AI Studio API Key. |
 | `GOOGLE_APPLICATION_CREDENTIALS` | Path to GCP service account key (set automatically in Docker). |
 | `OLLAMA_BASE_URL` | Ollama API URL (default: `http://localhost:11434/v1`). |
 | `OLLAMA_MODEL` | Default Ollama model for both Flash and Pro tiers. |

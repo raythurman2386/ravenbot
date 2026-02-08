@@ -9,40 +9,25 @@ import (
 )
 
 func TestLoadConfig(t *testing.T) {
-	t.Run("default backend is vertex", func(t *testing.T) {
-		_ = os.Setenv("GCP_PROJECT", "test-project")
+	t.Run("default backend is gemini", func(t *testing.T) {
+		_ = os.Setenv("GEMINI_API_KEY", "test-key")
 		_ = os.Unsetenv("AI_BACKEND")
-		defer func() { _ = os.Unsetenv("GCP_PROJECT") }()
+		defer func() { _ = os.Unsetenv("GEMINI_API_KEY") }()
 
 		cfg, err := LoadConfig()
 		require.NoError(t, err)
-		assert.Equal(t, BackendVertex, cfg.AIBackend)
-		assert.Equal(t, "test-project", cfg.GCPProject)
-		assert.Equal(t, "us-central1", cfg.GCPLocation, "should default location to us-central1")
+		assert.Equal(t, BackendGemini, cfg.AIBackend)
+		assert.Equal(t, "test-key", cfg.GeminiAPIKey)
 	})
 
-	t.Run("vertex with custom location", func(t *testing.T) {
-		_ = os.Setenv("GCP_PROJECT", "test-project")
-		_ = os.Setenv("GCP_LOCATION", "europe-west1")
-		defer func() {
-			_ = os.Unsetenv("GCP_PROJECT")
-			_ = os.Unsetenv("GCP_LOCATION")
-		}()
-
-		cfg, err := LoadConfig()
-		require.NoError(t, err)
-		assert.Equal(t, "test-project", cfg.GCPProject)
-		assert.Equal(t, "europe-west1", cfg.GCPLocation)
-	})
-
-	t.Run("vertex requires GCP_PROJECT", func(t *testing.T) {
-		_ = os.Unsetenv("GCP_PROJECT")
+	t.Run("gemini requires GEMINI_API_KEY", func(t *testing.T) {
+		_ = os.Unsetenv("GEMINI_API_KEY")
 		_ = os.Unsetenv("AI_BACKEND")
 
 		cfg, err := LoadConfig()
 		assert.Error(t, err)
 		assert.Nil(t, cfg)
-		assert.Contains(t, err.Error(), "GCP_PROJECT")
+		assert.Contains(t, err.Error(), "GEMINI_API_KEY")
 	})
 
 	t.Run("ollama backend loads without GCP_PROJECT", func(t *testing.T) {
@@ -61,7 +46,7 @@ func TestLoadConfig(t *testing.T) {
 		assert.Equal(t, BackendOllama, cfg.AIBackend)
 		assert.Equal(t, "http://localhost:11434/v1", cfg.OllamaBaseURL)
 		assert.Equal(t, "llama3.2", cfg.OllamaModel)
-		assert.Empty(t, cfg.GCPProject)
+		assert.Empty(t, cfg.GeminiAPIKey)
 	})
 
 	t.Run("ollama with flash and pro model overrides", func(t *testing.T) {
