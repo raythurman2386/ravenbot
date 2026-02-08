@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
+	"strings"
 )
 
 type MCPServerConfig struct {
@@ -35,9 +36,26 @@ type BotConfig struct {
 	RoutingPrompt        string  `json:"routingPrompt"`
 }
 
+// Supported AI backend values.
+const (
+	BackendVertex = "vertex"
+	BackendOllama = "ollama"
+)
+
 type Config struct {
-	GCPProject       string
-	GCPLocation      string
+	// AI Backend selection ("vertex" or "ollama")
+	AIBackend string
+
+	// Vertex AI settings (required when AIBackend == "vertex")
+	GCPProject  string
+	GCPLocation string
+
+	// Ollama settings (used when AIBackend == "ollama")
+	OllamaBaseURL    string
+	OllamaModel      string // Default model for both Flash and Pro
+	OllamaFlashModel string // Optional override for Flash
+	OllamaProModel   string // Optional override for Pro
+
 	TelegramBotToken string
 	TelegramChatID   int64
 	DiscordBotToken  string
@@ -51,25 +69,40 @@ type Config struct {
 }
 
 func LoadConfig() (*Config, error) {
-	gcpProject := os.Getenv("GCP_PROJECT")
-	if gcpProject == "" {
-		return nil, fmt.Errorf("GCP_PROJECT environment variable is not set")
+	backend := strings.ToLower(os.Getenv("AI_BACKEND"))
+	if backend == "" {
+		backend = BackendVertex
 	}
-
-	gcpLocation := os.Getenv("GCP_LOCATION")
-	if gcpLocation == "" {
-		gcpLocation = "us-central1"
+	if backend != BackendVertex && backend != BackendOllama {
+		return nil, fmt.Errorf("unsupported AI_BACKEND %q: must be %q or %q", backend, BackendVertex, BackendOllama)
 	}
 
 	cfg := &Config{
-		GCPProject:       gcpProject,
-		GCPLocation:      gcpLocation,
+		AIBackend:        backend,
 		TelegramBotToken: os.Getenv("TELEGRAM_BOT_TOKEN"),
 		DiscordBotToken:  os.Getenv("DISCORD_BOT_TOKEN"),
 		DiscordChannelID: os.Getenv("DISCORD_CHANNEL_ID"),
 		JulesAPIKey:      os.Getenv("JULES_API_KEY"),
 		DBPath:           "data/ravenbot.db",
 		Bot:              BotConfig{},
+	}
+
+	// Backend-specific configuration
+	switch backend {
+	case BackendVertex:
+		cfg.GCPProject = os.Getenv("GCP_PROJECT")
+		if cfg.GCPProject == "" {
+			return nil, fmt.Errorf("GCP_PROJECT environment variable is required when AI_BACKEND=%s", BackendVertex)
+		}
+		cfg.GCPLocation = os.Getenv("GCP_LOCATION")
+		if cfg.GCPLocation == "" {
+			cfg.GCPLocation = "us-central1"
+		}
+	case BackendOllama:
+		cfg.OllamaBaseURL = os.Getenv("OLLAMA_BASE_URL")
+		cfg.OllamaModel = os.Getenv("OLLAMA_MODEL")
+		cfg.OllamaFlashModel = os.Getenv("OLLAMA_FLASH_MODEL")
+		cfg.OllamaProModel = os.Getenv("OLLAMA_PRO_MODEL")
 	}
 
 	// 2. Load Configuration from JSON file

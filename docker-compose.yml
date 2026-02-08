@@ -2,10 +2,17 @@ services:
   ravenbot:
     build: .
     restart: always
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     environment:
+      - AI_BACKEND=${AI_BACKEND:-vertex}
       - GCP_PROJECT=${GCP_PROJECT}
       - GCP_LOCATION=${GCP_LOCATION:-us-central1}
       - GOOGLE_APPLICATION_CREDENTIALS=/app/credentials/application_default_credentials.json
+      - OLLAMA_BASE_URL=${OLLAMA_BASE_URL:-http://host.docker.internal:11434/v1}
+      - OLLAMA_MODEL=${OLLAMA_MODEL}
+      - OLLAMA_FLASH_MODEL=${OLLAMA_FLASH_MODEL}
+      - OLLAMA_PRO_MODEL=${OLLAMA_PRO_MODEL}
       - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN}
       - TELEGRAM_CHAT_ID=${TELEGRAM_CHAT_ID}
       - DISCORD_BOT_TOKEN=${DISCORD_BOT_TOKEN}

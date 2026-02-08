@@ -9,6 +9,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/raythurman2386/ravenbot/internal/backend"
 	"github.com/raythurman2386/ravenbot/internal/config"
 	raven "github.com/raythurman2386/ravenbot/internal/db"
 	"github.com/raythurman2386/ravenbot/internal/mcp"
@@ -18,7 +19,6 @@ import (
 	"google.golang.org/adk/agent"
 	"google.golang.org/adk/agent/llmagent"
 	"google.golang.org/adk/model"
-	"google.golang.org/adk/model/gemini"
 	"google.golang.org/adk/runner"
 	"google.golang.org/adk/session"
 	adkdb "google.golang.org/adk/session/database"
@@ -52,27 +52,8 @@ type Agent struct {
 	researchMCPTools []tool.Tool
 }
 
-// vertexClientConfig returns the genai.ClientConfig for Vertex AI using ADC.
-func (a *Agent) vertexClientConfig() *genai.ClientConfig {
-	return &genai.ClientConfig{
-		Backend:  genai.BackendVertexAI,
-		Project:  a.cfg.GCPProject,
-		Location: a.cfg.GCPLocation,
-	}
-}
-
-// createFlashModel creates a Flash model backed by Vertex AI.
-func (a *Agent) createFlashModel(ctx context.Context) (model.LLM, error) {
-	return gemini.NewModel(ctx, a.cfg.Bot.FlashModel, a.vertexClientConfig())
-}
-
-// createProModel creates a Pro model backed by Vertex AI.
-func (a *Agent) createProModel(ctx context.Context) (model.LLM, error) {
-	return gemini.NewModel(ctx, a.cfg.Bot.ProModel, a.vertexClientConfig())
-}
-
 func NewAgent(ctx context.Context, cfg *config.Config, database *raven.DB, botStats *stats.Stats, dialector gorm.Dialector) (*Agent, error) {
-	slog.Info("Initializing agent with Vertex AI backend", "project", cfg.GCPProject, "location", cfg.GCPLocation)
+	slog.Info("Initializing agent", "backend", cfg.AIBackend)
 
 	a := &Agent{
 		cfg:            cfg,
@@ -82,16 +63,16 @@ func NewAgent(ctx context.Context, cfg *config.Config, database *raven.DB, botSt
 		browserManager: tools.NewBrowserManager(ctx),
 	}
 
-	// 1. Initialize ADK Models (Flash & Pro) via Vertex AI
+	// 1. Initialize ADK Models (Flash & Pro) via configured backend
 	var err error
-	a.flashLLM, err = a.createFlashModel(ctx)
+	a.flashLLM, err = backend.NewFlashModel(ctx, cfg)
 	if err != nil {
-		return nil, fmt.Errorf("failed to create ADK Gemini Flash model: %w", err)
+		return nil, fmt.Errorf("failed to create Flash model: %w", err)
 	}
 
-	a.proLLM, err = a.createProModel(ctx)
+	a.proLLM, err = backend.NewProModel(ctx, cfg)
 	if err != nil {
-		return nil, fmt.Errorf("failed to create ADK Gemini Pro model: %w", err)
+		return nil, fmt.Errorf("failed to create Pro model: %w", err)
 	}
 
 	// 3. Initialize MCP Servers

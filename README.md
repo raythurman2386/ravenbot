@@ -2,7 +2,7 @@
 
 ravenbot is a high-performance, self-hosted autonomous AI agent built in **Go 1.25.6** using the **Google Agent Development Kit (ADK)**. It functions as a proactive technical assistant that researches the latest trends in Golang, AI/LLM, and Geospatial Engineering, delivering high-quality briefings directly to your pocket.
 
-Equipped with a **Gemini 3 Pro** brain and a **Gemini 3 Flash** router, ravenbot can browse the web, execute system commands, and delegate complex tasks to specialized sub-agents.
+Equipped with a pluggable AI backend supporting **Google Vertex AI** (Gemini 3 Pro/Flash) and **Ollama** (local models), ravenbot can browse the web, execute system commands, and delegate complex tasks to specialized sub-agents.
 
 ---
 
@@ -48,8 +48,8 @@ ravenbot supports the **Model Context Protocol (MCP)**, allowing it to seamlessl
 
 - **Core**: Go 1.25.6
 - **Framework**: [google.golang.org/adk](https://pkg.go.dev/google.golang.org/adk) (v0.4.0)
-- **AI Backend**: Google Cloud Vertex AI (via Application Default Credentials)
-- **AI Models**: Gemini 3 Pro & Gemini 3 Flash (via `google.golang.org/genai`)
+- **AI Backend**: Pluggable — **Google Vertex AI** or **Ollama** (selected via `AI_BACKEND` env var)
+- **AI Models**: Gemini 3 Pro & Flash (Vertex AI) or any Ollama-compatible model (e.g., Qwen, Llama)
 - **Scheduler**: [github.com/raythurman2386/cronlib](https://github.com/raythurman2386/cronlib)
 - **Browser**: `chromedp` (v0.14.2)
 - **Database**: `modernc.org/sqlite` (v1.44.3)
@@ -61,8 +61,8 @@ ravenbot supports the **Model Context Protocol (MCP)**, allowing it to seamlessl
 
 ### 1. Prerequisites
 - Docker & Docker Compose
-- GCP Project with the Vertex AI API enabled
-- GCP Service Account key (JSON) for authentication
+- **For Vertex AI backend**: GCP Project with the Vertex AI API enabled + Service Account key (JSON)
+- **For Ollama backend**: A running [Ollama](https://ollama.com/) instance (local or remote)
 - (Optional) Telegram/Discord Bot Tokens
 - (Optional) Jules Agent API Key
 - (Optional) GitHub Personal Access Token (for MCP)
@@ -77,9 +77,9 @@ cd ravenbot
 
 # Set up your environment
 cp .env.example .env
-# Edit .env with your GCP project and other keys
+# Edit .env — set AI_BACKEND to "vertex" or "ollama" and configure accordingly
 
-# Place your GCP service account key
+# For Vertex AI: place your GCP service account key
 mkdir -p credentials
 cp /path/to/your/service-account.json credentials/
 
@@ -96,9 +96,14 @@ docker compose up -d --build
 ### Environment Variables (.env)
 | Variable | Description |
 |----------|-------------|
-| `GCP_PROJECT` | **Required**. Your Google Cloud project ID. |
+| `AI_BACKEND` | AI backend to use: `vertex` (default) or `ollama`. |
+| `GCP_PROJECT` | **Required for Vertex AI**. Your Google Cloud project ID. |
 | `GCP_LOCATION` | GCP region for Vertex AI (default: `us-central1`). |
 | `GOOGLE_APPLICATION_CREDENTIALS` | Path to GCP service account key (set automatically in Docker). |
+| `OLLAMA_BASE_URL` | Ollama API URL (default: `http://localhost:11434/v1`). |
+| `OLLAMA_MODEL` | Default Ollama model for both Flash and Pro tiers. |
+| `OLLAMA_FLASH_MODEL` | Optional: override model for the Flash (fast) tier. |
+| `OLLAMA_PRO_MODEL` | Optional: override model for the Pro (reasoning) tier. |
 | `TELEGRAM_BOT_TOKEN` | Token for the Telegram bot. |
 | `TELEGRAM_CHAT_ID` | Authorized Telegram Chat ID. |
 | `DISCORD_BOT_TOKEN` | Token for the Discord bot. |
@@ -124,6 +129,8 @@ The following servers are currently active:
 
 - `cmd/bot/`: Main application entry point and interactive loop.
 - `internal/agent/`: Core agent logic, routing, sub-agents, and ADK integration.
+- `internal/backend/`: Backend factory — creates `model.LLM` instances for Vertex AI or Ollama.
+- `internal/ollama/`: Ollama adapter implementing `model.LLM` via OpenAI-compatible API.
 - `internal/tools/`: Native tool implementations (Web, RSS, Shell, Browser, Jules).
 - `internal/mcp/`: Custom MCP client for Stdio and SSE transports.
 - `internal/db/`: Persistence layer (SQLite) for headlines and briefings.
