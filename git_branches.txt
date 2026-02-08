@@ -1,0 +1,7 @@
+  feat/new-features-and-refactor
+  feature/mcp-integration
+* master
+  migrate-to-adk-v2-2130708930882678891
+  model-routing-layer-14704757299710214946
+  refactor-agent-and-mcp-fix-17739219076358980264
+  replace-shell-with-mcp-7994261339467132685

@@ -5,8 +5,11 @@ This document provides structural and behavioral context for AI agents working o
 ## 🛠 Tech Stack
 - **Language**: Go 1.25.6
 - **AI Framework**: Google Agent Development Kit (ADK) `google.golang.org/adk`
-- **AI Backend**: Google Cloud Vertex AI (`genai.BackendVertexAI`) with Application Default Credentials
-- **Generative AI**: `google.golang.org/genai` (Gemini 3 Pro & Flash)
+- **AI Backend**: Pluggable via `AI_BACKEND` env var:
+  - `vertex` (default): Google Cloud Vertex AI (`genai.BackendVertexAI`) with Application Default Credentials
+  - `ollama`: Local/remote Ollama via OpenAI-compatible API (`internal/ollama`)
+- **Backend Factory**: `internal/backend` — creates `model.LLM` instances based on config; the agent never imports `gemini` or `ollama` directly
+- **Generative AI**: `google.golang.org/genai` (Gemini 3 Pro & Flash for Vertex AI, any compatible model for Ollama)
 - **Database**: SQLite via `modernc.org/sqlite` (CGO-free)
 - **Networking**: Custom safe HTTP client with SSRF protection in `internal/tools/validator.go`
 - **Browsing**: Headless Chrome via `github.com/chromedp/chromedp`
@@ -20,6 +23,8 @@ This document provides structural and behavioral context for AI agents working o
 │   │   ├── agent.go       # ADK Agent initialization and model routing
 │   │   ├── tools.go       # Tool registration (Core, Technical, MCP)
 │   │   └── report.go      # Markdown report generation logic
+│   ├── backend/           # Backend factory (Vertex AI or Ollama) for model.LLM
+│   ├── ollama/            # Ollama adapter (OpenAI-compatible API → model.LLM)
 │   ├── mcp/               # Custom MCP client (Stdio & SSE transports)
 │   ├── tools/             # Native tool implementations (Search, Browser, RSS, Scraper)
 │   ├── db/                # SQLite persistence (Headlines, Briefings)
@@ -68,7 +73,9 @@ Tools discovered from the active MCP servers are dynamically registered and pref
 - **`sequentialthinking_`**: Available to the Pro Runner to enhance reasoning capabilities.
 
 ## 🛡 Security & Constraints
-- **Vertex AI Auth**: Models authenticate via Application Default Credentials (ADC) — no static API keys. Set `GCP_PROJECT` and `GCP_LOCATION` env vars; credentials are managed by `gcloud auth application-default login` or a mounted service account key.
+- **AI Backend Auth**:
+  - **Vertex AI**: Models authenticate via Application Default Credentials (ADC) — no static API keys. Set `GCP_PROJECT` and `GCP_LOCATION` env vars; credentials are managed by `gcloud auth application-default login` or a mounted service account key.
+  - **Ollama**: No authentication required. Set `OLLAMA_BASE_URL` to point at your Ollama instance.
 - **SSRF Protection**: All outbound web requests must pass through `internal/tools/validator.go`. Local/private IPs are blocked by default unless `ALLOW_LOCAL_URLS=true` is set.
 - **Restricted Shell**: `ShellExecute` is limited to a whitelist of commands defined in `config.json`.
 - **Tool Rule**: AI must output ONLY the tool call (no preamble) when invoking a function to avoid system crashes.
