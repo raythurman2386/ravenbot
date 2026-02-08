@@ -15,14 +15,124 @@ import (
 	"google.golang.org/adk/tool/functiontool"
 )
 
+// -- Argument Structs with Robust Unmarshalling --
+
+type FetchRSSArgs struct {
+	URL string `json:"url" jsonschema:"The URL of the RSS feed."`
+}
+
+func (a *FetchRSSArgs) UnmarshalJSON(data []byte) error {
+	type Alias FetchRSSArgs
+	var obj Alias
+	if err := json.Unmarshal(data, &obj); err == nil {
+		*a = FetchRSSArgs(obj)
+		return nil
+	}
+	var arr []string
+	if err := json.Unmarshal(data, &arr); err == nil && len(arr) > 0 {
+		a.URL = arr[0]
+		return nil
+	}
+	return fmt.Errorf("failed to unmarshal FetchRSSArgs from object or array")
+}
+
+type ScrapePageArgs struct {
+	URL string `json:"url" jsonschema:"The URL of the webpage to scrape."`
+}
+
+func (a *ScrapePageArgs) UnmarshalJSON(data []byte) error {
+	type Alias ScrapePageArgs
+	var obj Alias
+	if err := json.Unmarshal(data, &obj); err == nil {
+		*a = ScrapePageArgs(obj)
+		return nil
+	}
+	var arr []string
+	if err := json.Unmarshal(data, &arr); err == nil && len(arr) > 0 {
+		a.URL = arr[0]
+		return nil
+	}
+	return fmt.Errorf("failed to unmarshal ScrapePageArgs from object or array")
+}
+
+type BrowseWebArgs struct {
+	URL string `json:"url" jsonschema:"The URL of the webpage to browse."`
+}
+
+func (a *BrowseWebArgs) UnmarshalJSON(data []byte) error {
+	type Alias BrowseWebArgs
+	var obj Alias
+	if err := json.Unmarshal(data, &obj); err == nil {
+		*a = BrowseWebArgs(obj)
+		return nil
+	}
+	var arr []string
+	if err := json.Unmarshal(data, &arr); err == nil && len(arr) > 0 {
+		a.URL = arr[0]
+		return nil
+	}
+	return fmt.Errorf("failed to unmarshal BrowseWebArgs from object or array")
+}
+
+type WebSearchArgs struct {
+	Query      string `json:"query" jsonschema:"The search query."`
+	MaxResults int    `json:"max_results,omitempty" jsonschema:"Max results (default 5)."`
+}
+
+func (a *WebSearchArgs) UnmarshalJSON(data []byte) error {
+	type Alias WebSearchArgs
+	var obj Alias
+	if err := json.Unmarshal(data, &obj); err == nil {
+		*a = WebSearchArgs(obj)
+		return nil
+	}
+	// Handle [query, maxResults] or just [query]
+	var arr []any
+	if err := json.Unmarshal(data, &arr); err == nil {
+		if len(arr) > 0 {
+			if s, ok := arr[0].(string); ok {
+				a.Query = s
+			}
+		}
+		if len(arr) > 1 {
+			// maxResults might be float64 because JSON numbers
+			if f, ok := arr[1].(float64); ok {
+				a.MaxResults = int(f)
+			} else if i, ok := arr[1].(int); ok {
+				a.MaxResults = i
+			}
+		}
+		return nil
+	}
+	return fmt.Errorf("failed to unmarshal WebSearchArgs from object or array")
+}
+
+type ReadMCPResourceArgs struct {
+	Server string `json:"server" jsonschema:"The name of the MCP server."`
+	URI    string `json:"uri" jsonschema:"The URI of the resource to read."`
+}
+
+func (a *ReadMCPResourceArgs) UnmarshalJSON(data []byte) error {
+	type Alias ReadMCPResourceArgs
+	var obj Alias
+	if err := json.Unmarshal(data, &obj); err == nil {
+		*a = ReadMCPResourceArgs(obj)
+		return nil
+	}
+	var arr []string
+	if err := json.Unmarshal(data, &arr); err == nil && len(arr) >= 2 {
+		a.Server = arr[0]
+		a.URI = arr[1]
+		return nil
+	}
+	return fmt.Errorf("failed to unmarshal ReadMCPResourceArgs from object or array")
+}
+
 // GetTechnicalTools returns the list of tools intended for the ResearchAssistant sub-agent.
 func (a *Agent) GetTechnicalTools() []tool.Tool {
 	var technicalTools []tool.Tool
 
 	// FetchRSS Tool
-	type FetchRSSArgs struct {
-		URL string `json:"url" jsonschema:"The URL of the RSS feed."`
-	}
 	fetchRSSTool, err := functiontool.New(functiontool.Config{
 		Name:        "FetchRSS",
 		Description: "Fetches information from an RSS feed URL. Returns a list of titles, links, and descriptions.",
@@ -38,9 +148,6 @@ func (a *Agent) GetTechnicalTools() []tool.Tool {
 	}
 
 	// ScrapePage Tool
-	type ScrapePageArgs struct {
-		URL string `json:"url" jsonschema:"The URL of the webpage to scrape."`
-	}
 	scrapePageTool, err := functiontool.New(functiontool.Config{
 		Name:        "ScrapePage",
 		Description: "Extracts textual content from a static webpage URL. Use this for standard HTML pages.",
@@ -52,9 +159,6 @@ func (a *Agent) GetTechnicalTools() []tool.Tool {
 	}
 
 	// BrowseWeb Tool
-	type BrowseWebArgs struct {
-		URL string `json:"url" jsonschema:"The URL of the webpage to browse."`
-	}
 	browseWebTool, err := functiontool.New(functiontool.Config{
 		Name:        "BrowseWeb",
 		Description: "Renders a webpage using a headless browser. Use this for JavaScript-heavy or single-page applications.",
@@ -66,10 +170,6 @@ func (a *Agent) GetTechnicalTools() []tool.Tool {
 	}
 
 	// WebSearch Tool
-	type WebSearchArgs struct {
-		Query      string `json:"query" jsonschema:"The search query."`
-		MaxResults int    `json:"max_results,omitempty" jsonschema:"Max results (default 5)."`
-	}
 	webSearchTool, err := functiontool.New(functiontool.Config{
 		Name:        "WebSearch",
 		Description: "Searches the web for real-time information and documentation.",
@@ -88,10 +188,6 @@ func (a *Agent) GetCoreTools() []tool.Tool {
 	var coreTools []tool.Tool
 
 	// ReadMCPResource Tool
-	type ReadMCPResourceArgs struct {
-		Server string `json:"server" jsonschema:"The name of the MCP server."`
-		URI    string `json:"uri" jsonschema:"The URI of the resource to read."`
-	}
 	readResourceTool, err := functiontool.New(functiontool.Config{
 		Name:        "ReadMCPResource",
 		Description: "Reads the content of an MCP resource from a specific server and URI.",

@@ -35,14 +35,54 @@ func DuckDuckGoSearch(ctx context.Context, query string, maxResults int) ([]Sear
 	if err != nil {
 		return nil, fmt.Errorf("failed to create request: %w", err)
 	}
-	req.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
-	req.Header.Set("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8")
-	req.Header.Set("Accept-Language", "en-US,en;q=0.5")
+	// Updated headers to mimic a modern browser and avoid 202/403
+	req.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36")
+	req.Header.Set("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7")
+	req.Header.Set("Accept-Language", "en-US,en;q=0.9")
+	req.Header.Set("Referer", "https://duckduckgo.com/")
+	req.Header.Set("Upgrade-Insecure-Requests", "1")
+	req.Header.Set("Sec-Fetch-Dest", "document")
+	req.Header.Set("Sec-Fetch-Mode", "navigate")
+	req.Header.Set("Sec-Fetch-Site", "same-origin")
+	req.Header.Set("Sec-Fetch-User", "?1")
 
 	client := NewSafeClient(30 * time.Second)
-	resp, err := client.Do(req)
-	if err != nil {
-		return nil, fmt.Errorf("failed to fetch search results: %w", err)
+	var resp *http.Response
+
+	// Retry loop for handling 202 Accepted or temporary failures
+	for i := 0; i < 3; i++ {
+		if i > 0 {
+			select {
+			case <-ctx.Done():
+				return nil, ctx.Err()
+			case <-time.After(1 * time.Second):
+				// Backoff before retry
+			}
+		}
+
+		resp, err = client.Do(req)
+		if err != nil {
+			return nil, fmt.Errorf("failed to fetch search results: %w", err)
+		}
+
+		if resp.StatusCode == http.StatusOK {
+			break
+		}
+
+		// If 202 Accepted, close body and retry
+		if resp.StatusCode == http.StatusAccepted {
+			resp.Body.Close()
+			continue
+		}
+
+		// For other non-200 codes, stop and return error (or maybe retry 5xx?)
+		// For now, only retry 202 as that's the specific DDG issue.
+		// We handle the error checking after the loop breaks.
+		break
+	}
+
+	if resp == nil {
+		return nil, fmt.Errorf("failed to get response")
 	}
 	defer func() { _ = resp.Body.Close() }()
 
