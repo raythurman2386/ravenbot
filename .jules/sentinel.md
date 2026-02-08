@@ -17,3 +17,8 @@
 **Vulnerability:** The bot lacked limits on user input length, creating a DoS risk. Additionally, SSRF protection focused on IP ranges but did not account for sensitive internal services on standard ports.
 **Learning:** Defense-in-depth requires addressing both application-level resource exhaustion and network-level lateral movement. Even if an IP is "public," specific ports (like 3306 or 6379) should never be accessed by a web scraper tool.
 **Prevention:** Enforce strict byte-length limits on all entry-point handlers. Enhance SSRF validation by implementing a port blacklist that blocks common internal infrastructure ports, even for otherwise valid hostnames.
+
+## 2025-02-14 - Robust SSRF: CGNAT and DialContext Port Validation
+**Vulnerability:** SSRF protection relied on Go's `IsPrivate()`, which omits the CGNAT range (`100.64.0.0/10`) and documentation IPs. Furthermore, the secure HTTP client only validated IPs at connection time, missing a final port-level check.
+**Learning:** Standard library "private" checks are often incomplete for modern cloud and overlay network (e.g., Tailscale) environments. Security validation must be applied at both the high-level URL entry point and the low-level transport layer to be truly effective.
+**Prevention:** Supplement `IsPrivate()` with a comprehensive list of non-routable CIDRs (CGNAT, Benchmarking, Documentation). Enforce the port blacklist within the `DialContext` of safe HTTP clients as a defense-in-depth measure against bypasses.
