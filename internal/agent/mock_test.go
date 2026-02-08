@@ -44,3 +44,22 @@ func NewTextResponse(text string) *model.LLMResponse {
 		},
 	}
 }
+
+// Helper to create a ToolCall response
+func NewToolCallResponse(name string, args map[string]any) *model.LLMResponse {
+	return &model.LLMResponse{
+		Content: &genai.Content{
+			Parts: []*genai.Part{
+				{
+					FunctionCall: &genai.FunctionCall{
+						Name: name,
+						Args: args,
+					},
+				},
+			},
+		},
+		UsageMetadata: &genai.GenerateContentResponseUsageMetadata{
+			TotalTokenCount: 100,
+		},
+	}
+}
