@@ -45,7 +45,11 @@ func resolveOllamaBaseURL(url string) string {
 func NewFlashModel(ctx context.Context, cfg *config.Config) (model.LLM, error) {
 	switch cfg.AIBackend {
 	case config.BackendGemini:
-		return gemini.NewModel(ctx, cfg.GeminiFlashModel, geminiClientConfig(cfg))
+		m, err := gemini.NewModel(ctx, cfg.GeminiFlashModel, geminiClientConfig(cfg))
+		if err != nil {
+			return nil, err
+		}
+		return NewSystemRoleWrapper(m), nil
 	case config.BackendOllama:
 		modelName := resolveOllamaModel(cfg.OllamaFlashModel, cfg.OllamaModel)
 		return ollama.New(
@@ -61,7 +65,11 @@ func NewFlashModel(ctx context.Context, cfg *config.Config) (model.LLM, error) {
 func NewProModel(ctx context.Context, cfg *config.Config) (model.LLM, error) {
 	switch cfg.AIBackend {
 	case config.BackendGemini:
-		return gemini.NewModel(ctx, cfg.GeminiProModel, geminiClientConfig(cfg))
+		m, err := gemini.NewModel(ctx, cfg.GeminiProModel, geminiClientConfig(cfg))
+		if err != nil {
+			return nil, err
+		}
+		return NewSystemRoleWrapper(m), nil
 	case config.BackendOllama:
 		modelName := resolveOllamaModel(cfg.OllamaProModel, cfg.OllamaModel)
 		return ollama.New(
