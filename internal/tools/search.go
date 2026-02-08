@@ -71,7 +71,7 @@ func DuckDuckGoSearch(ctx context.Context, query string, maxResults int) ([]Sear
 
 		// If 202 Accepted, close body and retry
 		if resp.StatusCode == http.StatusAccepted {
-			resp.Body.Close()
+			_ = resp.Body.Close()
 			continue
 		}
 
