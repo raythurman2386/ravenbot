@@ -29,7 +29,7 @@ JULES_API_KEY=your_jules_api_key_here
 
 ## 4. Usage
 
-Once configured, you can use the `/jules` command in your connected Discord channel or Telegram chat (or via the CLI).
+Once configured, you can use the `/jules` command in your connected Discord channel or Telegram chat.
 
 **Syntax:**
 ```

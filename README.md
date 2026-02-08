@@ -32,7 +32,7 @@ ravenbot supports the **Model Context Protocol (MCP)**, allowing it to seamlessl
 
 ### 💬 Multi-Channel & Interactive
 - **Proactive Heartbeat**: Automated daily technical newsletters scheduled via `CronLib`.
-- **Two-Way Comms**: Interactive listeners for **Telegram**, **Discord**, and **CLI**.
+- **Two-Way Comms**: Interactive listeners for **Telegram** and **Discord**.
   - `/research <topic>` - Trigger a deep-dive research mission on any subject.
   - `/jules <repo> <task>` - Delegate complex coding or repository tasks to the **Jules Agent API**.
   - `/status` - Check system health (disk, memory, uptime) via **SystemManager**.
@@ -81,14 +81,7 @@ cp .env.example .env
 docker compose up -d --build
 ```
 
-### 3. Interactive Mode (CLI)
-If you aren't using messaging apps, you can interact with ravenbot directly through the container terminal:
 
-```bash
-docker attach ravenbot-ravenbot-1
-# Then type:
-/research Go 1.26 performance
-```
 
 ---
 

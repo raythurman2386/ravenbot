@@ -13,7 +13,7 @@ This document provides structural and behavioral context for AI agents working o
 ## 📁 Project Structure
 ```text
 .
-├── cmd/bot/                # Application entry point (main loop, interactive mode)
+├── cmd/bot/                # Application entry point and main event loop
 ├── internal/
 │   ├── agent/             # Core AI logic (Agent struct, Routing, Sub-agents)
 │   │   ├── agent.go       # ADK Agent initialization and model routing
