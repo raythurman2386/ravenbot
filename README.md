@@ -60,7 +60,8 @@ ravenbot supports the **Model Context Protocol (MCP)**, allowing it to seamlessl
 
 ### 1. Prerequisites
 - Docker & Docker Compose
-- Google Gemini API Key
+- GCP Project with the Vertex AI API enabled
+- GCP Service Account key (JSON) for authentication
 - (Optional) Telegram/Discord Bot Tokens
 - (Optional) Jules Agent API Key
 - (Optional) GitHub Personal Access Token (for MCP)
@@ -75,7 +76,11 @@ cd ravenbot
 
 # Set up your environment
 cp .env.example .env
-# Edit .env with your keys
+# Edit .env with your GCP project and other keys
+
+# Place your GCP service account key
+mkdir -p credentials
+cp /path/to/your/service-account.json credentials/
 
 # Launch the agent
 docker compose up -d --build
@@ -90,7 +95,9 @@ docker compose up -d --build
 ### Environment Variables (.env)
 | Variable | Description |
 |----------|-------------|
-| `GEMINI_API_KEY` | **Required**. Your Google Gemini API key. |
+| `GCP_PROJECT` | **Required**. Your Google Cloud project ID. |
+| `GCP_LOCATION` | GCP region for Vertex AI (default: `us-central1`). |
+| `GOOGLE_APPLICATION_CREDENTIALS` | Path to GCP service account key (set automatically in Docker). |
 | `TELEGRAM_BOT_TOKEN` | Token for the Telegram bot. |
 | `TELEGRAM_CHAT_ID` | Authorized Telegram Chat ID. |
 | `DISCORD_BOT_TOKEN` | Token for the Discord bot. |

@@ -7,7 +7,6 @@ import (
 	"log/slog"
 	"strings"
 	"sync"
-	"sync/atomic"
 	"time"
 
 	"github.com/raythurman2386/ravenbot/internal/config"
@@ -31,20 +30,6 @@ import (
 
 const AppName = "ravenbot"
 
-// keyCounter provides atomic round-robin API key rotation
-var keyCounter uint64
-
-// getNextAPIKey returns the next API key in round-robin fashion
-func getNextAPIKey(keys []string) string {
-	if len(keys) == 0 {
-		return ""
-	}
-	idx := atomic.AddUint64(&keyCounter, 1) - 1
-	key := keys[idx%uint64(len(keys))]
-	slog.Debug("Selected API key", "index", idx%uint64(len(keys)), "total_keys", len(keys))
-	return key
-}
-
 type Agent struct {
 	cfg            *config.Config
 	db             *raven.DB
@@ -53,7 +38,7 @@ type Agent struct {
 	browserManager *tools.BrowserManager
 	mu             sync.RWMutex
 
-	// ADK components - these store the current models but can be rotated
+	// ADK components
 	flashLLM model.LLM
 	proLLM   model.LLM
 
@@ -67,46 +52,27 @@ type Agent struct {
 	researchMCPTools []tool.Tool
 }
 
-// createFlashModel creates a new Flash model with a rotating API key
+// vertexClientConfig returns the genai.ClientConfig for Vertex AI using ADC.
+func (a *Agent) vertexClientConfig() *genai.ClientConfig {
+	return &genai.ClientConfig{
+		Backend:  genai.BackendVertexAI,
+		Project:  a.cfg.GCPProject,
+		Location: a.cfg.GCPLocation,
+	}
+}
+
+// createFlashModel creates a Flash model backed by Vertex AI.
 func (a *Agent) createFlashModel(ctx context.Context) (model.LLM, error) {
-	return gemini.NewModel(ctx, a.cfg.Bot.FlashModel, &genai.ClientConfig{
-		APIKey:  getNextAPIKey(a.cfg.GeminiAPIKeys),
-		Backend: genai.BackendGeminiAPI,
-	})
+	return gemini.NewModel(ctx, a.cfg.Bot.FlashModel, a.vertexClientConfig())
 }
 
-// createProModel creates a new Pro model with a rotating API key
+// createProModel creates a Pro model backed by Vertex AI.
 func (a *Agent) createProModel(ctx context.Context) (model.LLM, error) {
-	return gemini.NewModel(ctx, a.cfg.Bot.ProModel, &genai.ClientConfig{
-		APIKey:  getNextAPIKey(a.cfg.GeminiAPIKeys),
-		Backend: genai.BackendGeminiAPI,
-	})
-}
-
-// rotateModels recreates the LLM models with new API keys (call on rate limit errors)
-func (a *Agent) rotateModels(ctx context.Context) error {
-	a.mu.Lock()
-	defer a.mu.Unlock()
-
-	slog.Info("Rotating API keys due to rate limit")
-
-	flashLLM, err := a.createFlashModel(ctx)
-	if err != nil {
-		return fmt.Errorf("failed to rotate flash model: %w", err)
-	}
-	a.flashLLM = flashLLM
-
-	proLLM, err := a.createProModel(ctx)
-	if err != nil {
-		return fmt.Errorf("failed to rotate pro model: %w", err)
-	}
-	a.proLLM = proLLM
-
-	return nil
+	return gemini.NewModel(ctx, a.cfg.Bot.ProModel, a.vertexClientConfig())
 }
 
 func NewAgent(ctx context.Context, cfg *config.Config, database *raven.DB, botStats *stats.Stats, dialector gorm.Dialector) (*Agent, error) {
-	slog.Info("Initializing agent with API key rotation", "num_keys", len(cfg.GeminiAPIKeys))
+	slog.Info("Initializing agent with Vertex AI backend", "project", cfg.GCPProject, "location", cfg.GCPLocation)
 
 	a := &Agent{
 		cfg:            cfg,
@@ -440,61 +406,32 @@ func (a *Agent) ClearSession(sessionID string) {
 
 // classifyPrompt determines if the prompt is 'Simple' or 'Complex' using the Flash model.
 // Heavily biased towards "Simple" to maximize the usage of the highly capable Flash model.
-// Includes retry logic with API key rotation on rate limit errors.
 func (a *Agent) classifyPrompt(ctx context.Context, message string) string {
 	prompt := fmt.Sprintf(a.cfg.Bot.RoutingPrompt, message)
 
-	maxRetries := len(a.cfg.GeminiAPIKeys)
-	if maxRetries < 1 {
-		maxRetries = 1
+	respIter := a.flashLLM.GenerateContent(ctx, &model.LLMRequest{
+		Contents: []*genai.Content{{
+			Role:  "user",
+			Parts: []*genai.Part{{Text: prompt}},
+		}},
+	}, false)
+
+	var result strings.Builder
+	for resp, err := range respIter {
+		if err != nil {
+			slog.Warn("Classification failed, defaulting to Flash", "error", err)
+			return "Simple"
+		}
+		if resp.Content != nil && len(resp.Content.Parts) > 0 {
+			result.WriteString(resp.Content.Parts[0].Text)
+		}
 	}
 
-	for attempt := 0; attempt < maxRetries; attempt++ {
-		a.mu.RLock()
-		llm := a.flashLLM
-		a.mu.RUnlock()
-
-		respIter := llm.GenerateContent(ctx, &model.LLMRequest{
-			Contents: []*genai.Content{{
-				Role:  "user",
-				Parts: []*genai.Part{{Text: prompt}},
-			}},
-		}, false)
-
-		var result strings.Builder
-		var rateLimited bool
-		for resp, err := range respIter {
-			if err != nil {
-				if strings.Contains(err.Error(), "429") || strings.Contains(err.Error(), "RESOURCE_EXHAUSTED") {
-					rateLimited = true
-					slog.Warn("Rate limited during classification, rotating key", "attempt", attempt+1, "error", err)
-					break
-				}
-				slog.Warn("Classification failed, defaulting to Flash", "error", err)
-				return "Simple" // Default to Flash on errors
-			}
-			if resp.Content != nil && len(resp.Content.Parts) > 0 {
-				result.WriteString(resp.Content.Parts[0].Text)
-			}
-		}
-
-		if rateLimited {
-			// Rotate to a new API key and retry
-			if err := a.rotateModels(ctx); err != nil {
-				slog.Error("Failed to rotate models", "error", err)
-			}
-			continue
-		}
-
-		finalResult := strings.TrimSpace(result.String())
-		if strings.EqualFold(finalResult, "Complex") {
-			return "Complex"
-		}
-		return "Simple" // Default to Simple/Flash
+	finalResult := strings.TrimSpace(result.String())
+	if strings.EqualFold(finalResult, "Complex") {
+		return "Complex"
 	}
-
-	slog.Warn("All API keys exhausted during classification, defaulting to Flash")
-	return "Simple" // Default to Flash when all keys exhausted
+	return "Simple"
 }
 
 // Chat handles conversational messages with session persistence and dynamic model routing.
@@ -608,20 +545,11 @@ func (a *Agent) consumeRunnerEvents(sessionID string, events iter.Seq2[*session.
 		if err != nil {
 			slog.Error("ADK runner yielded error", "error", err)
 			msg := err.Error()
-			// Improved error handling for common ADK/Gemini turn order issues.
+			// Handle common ADK/Gemini turn order issues.
 			if strings.Contains(msg, "Error 400") && strings.Contains(msg, "function call turn") {
 				slog.Warn("Turn order corruption detected, performing emergency session reset", "sessionID", sessionID)
 				a.ClearSession(sessionID)
-				// We return a user-friendly error suggesting a retry
 				return "", fmt.Errorf("encountered a technical glitch in conversation turn order; session reset, please try again")
-			}
-			// Check for rate limit errors and trigger key rotation
-			if strings.Contains(msg, "429") || strings.Contains(msg, "RESOURCE_EXHAUSTED") {
-				slog.Warn("Rate limit detected, rotating API keys", "sessionID", sessionID)
-				if rotateErr := a.rotateModels(context.Background()); rotateErr != nil {
-					slog.Error("Failed to rotate models after rate limit", "error", rotateErr)
-				}
-				return "", fmt.Errorf("rate limited by API, please try again in a moment")
 			}
 			return "", fmt.Errorf("ADK runner error: %w", err)
 		}

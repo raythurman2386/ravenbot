@@ -11,13 +11,13 @@ import (
 func BenchmarkMarkReminderDelivered_Sequential(b *testing.B) {
 	dbPath := "bench_seq.db"
 	_ = os.Remove(dbPath)
-	defer os.Remove(dbPath)
+	defer func() { _ = os.Remove(dbPath) }()
 
 	database, err := InitDB(dbPath)
 	if err != nil {
 		b.Fatalf("failed to init db: %v", err)
 	}
-	defer database.Close()
+	defer func() { _ = database.Close() }()
 
 	ctx := context.Background()
 	numReminders := 1000
@@ -58,13 +58,13 @@ func BenchmarkMarkReminderDelivered_Sequential(b *testing.B) {
 func BenchmarkMarkRemindersDelivered_Batch(b *testing.B) {
 	dbPath := "bench_batch.db"
 	_ = os.Remove(dbPath)
-	defer os.Remove(dbPath)
+	defer func() { _ = os.Remove(dbPath) }()
 
 	database, err := InitDB(dbPath)
 	if err != nil {
 		b.Fatalf("failed to init db: %v", err)
 	}
-	defer database.Close()
+	defer func() { _ = database.Close() }()
 
 	ctx := context.Background()
 	numReminders := 1000
