@@ -23,6 +23,10 @@ func TestValidateURL(t *testing.T) {
 		{"Blocked port 3306", "http://example.com:3306", false, true},
 		{"Allowed port 8080", "http://example.com:8080", false, false},
 		{"IPv6 Loopback", "http://[::1]", false, true},
+		{"Carrier-Grade NAT (CGNAT)", "http://100.64.0.1", false, true},
+		{"Documentation Range (TEST-NET-1)", "http://192.0.2.1", false, true},
+		{"Benchmarking Range", "http://198.18.0.1", false, true},
+		{"IPv6 Documentation", "http://[2001:db8::1]", false, true},
 		{"Allow local URLs", "http://127.0.0.1", true, false},
 	}
 
