@@ -82,7 +82,7 @@ func NewAgent(ctx context.Context, cfg *config.Config, database *raven.DB, botSt
 		browserManager: tools.NewBrowserManager(ctx),
 	}
 
-	// 1. Initialize ADK Models (Flash & Pro) with rotating API keys
+	// 1. Initialize ADK Models (Flash & Pro) via Vertex AI
 	var err error
 	a.flashLLM, err = a.createFlashModel(ctx)
 	if err != nil {

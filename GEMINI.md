@@ -5,6 +5,7 @@ This document provides structural and behavioral context for AI agents working o
 ## 🛠 Tech Stack
 - **Language**: Go 1.25.6
 - **AI Framework**: Google Agent Development Kit (ADK) `google.golang.org/adk`
+- **AI Backend**: Google Cloud Vertex AI (`genai.BackendVertexAI`) with Application Default Credentials
 - **Generative AI**: `google.golang.org/genai` (Gemini 3 Pro & Flash)
 - **Database**: SQLite via `modernc.org/sqlite` (CGO-free)
 - **Networking**: Custom safe HTTP client with SSRF protection in `internal/tools/validator.go`
@@ -67,6 +68,7 @@ Tools discovered from the active MCP servers are dynamically registered and pref
 - **`sequentialthinking_`**: Available to the Pro Runner to enhance reasoning capabilities.
 
 ## 🛡 Security & Constraints
+- **Vertex AI Auth**: Models authenticate via Application Default Credentials (ADC) — no static API keys. Set `GCP_PROJECT` and `GCP_LOCATION` env vars; credentials are managed by `gcloud auth application-default login` or a mounted service account key.
 - **SSRF Protection**: All outbound web requests must pass through `internal/tools/validator.go`. Local/private IPs are blocked by default unless `ALLOW_LOCAL_URLS=true` is set.
 - **Restricted Shell**: `ShellExecute` is limited to a whitelist of commands defined in `config.json`.
 - **Tool Rule**: AI must output ONLY the tool call (no preamble) when invoking a function to avoid system crashes.

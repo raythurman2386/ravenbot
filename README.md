@@ -48,7 +48,8 @@ ravenbot supports the **Model Context Protocol (MCP)**, allowing it to seamlessl
 
 - **Core**: Go 1.25.6
 - **Framework**: [google.golang.org/adk](https://pkg.go.dev/google.golang.org/adk) (v0.4.0)
-- **AI Models**: Gemini 3 Pro & Gemini 3 Flash (via `google.golang.org/genai` v1.44.0)
+- **AI Backend**: Google Cloud Vertex AI (via Application Default Credentials)
+- **AI Models**: Gemini 3 Pro & Gemini 3 Flash (via `google.golang.org/genai`)
 - **Scheduler**: [github.com/raythurman2386/cronlib](https://github.com/raythurman2386/cronlib)
 - **Browser**: `chromedp` (v0.14.2)
 - **Database**: `modernc.org/sqlite` (v1.44.3)
