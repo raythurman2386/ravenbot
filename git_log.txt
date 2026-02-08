@@ -1,5 +1,0 @@
-406e666 Lint: correcting lint error in search tool
-ccaa5e5 Merge pull request #38 from raythurman2386/fix-daily-briefing-tools-1731151059969461619
-12d4e61 fix: handle vertex tool array args and ddg 202 status
-83af207 Merge pull request #37 from raythurman2386/harden-ssrf-protection-14136574538151643827
-e9492d4 🛡️ Sentinel: Harden SSRF protection in validator
