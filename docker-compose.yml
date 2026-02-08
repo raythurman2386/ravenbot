@@ -30,6 +30,7 @@ services:
       - ~/.config/gcloud/application_default_credentials.json:/app/credentials/application_default_credentials.json:ro
       - /usr/local/bin/goweathermcp:/usr/local/bin/goweathermcp
       - /usr/local/bin/sysmetrics-mcp:/usr/local/bin/sysmetrics-mcp
+      - /var/run/docker.sock:/var/run/docker.sock
     logging:
       driver: "json-file"
       options:
