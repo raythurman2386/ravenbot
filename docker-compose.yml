@@ -5,11 +5,11 @@ services:
     extra_hosts:
       - "host.docker.internal:host-gateway"
     environment:
-      - AI_BACKEND=${AI_BACKEND:-gemini}
+      - AI_BACKEND=${AI_BACKEND:-ollama}
       - GEMINI_API_KEY=${GEMINI_API_KEY}
       - GEMINI_FLASH_MODEL=${GEMINI_FLASH_MODEL}
       - GEMINI_PRO_MODEL=${GEMINI_PRO_MODEL}
-      - OLLAMA_BASE_URL=${OLLAMA_BASE_URL:-http://host.docker.internal:11434/v1}
+      - OLLAMA_BASE_URL=${OLLAMA_BASE_URL:-http://172.17.0.1:11434/v1}
       - OLLAMA_MODEL=${OLLAMA_MODEL}
       - OLLAMA_FLASH_MODEL=${OLLAMA_FLASH_MODEL}
       - OLLAMA_PRO_MODEL=${OLLAMA_PRO_MODEL}
