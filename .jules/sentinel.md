@@ -22,3 +22,8 @@
 **Vulnerability:** SSRF protection relied on Go's `IsPrivate()`, which omits the CGNAT range (`100.64.0.0/10`) and documentation IPs. Furthermore, the secure HTTP client only validated IPs at connection time, missing a final port-level check.
 **Learning:** Standard library "private" checks are often incomplete for modern cloud and overlay network (e.g., Tailscale) environments. Security validation must be applied at both the high-level URL entry point and the low-level transport layer to be truly effective.
 **Prevention:** Supplement `IsPrivate()` with a comprehensive list of non-routable CIDRs (CGNAT, Benchmarking, Documentation). Enforce the port blacklist within the `DialContext` of safe HTTP clients as a defense-in-depth measure against bypasses.
+
+## 2025-02-18 - Expanding SSRF Protection and Chromedp Limitations
+**Vulnerability:** SSRF protection missed several sensitive internal ports (SMB, etcd, etc.) and non-routable IPv6 ranges. Additionally, while `NewSafeClient` protects HTTP tools, `chromedp` (used in `BrowseWeb`) bypasses these protections for sub-resources and redirects after the initial `ValidateURL` check.
+**Learning:** Blacklists must be regularly updated to account for common internal services. However, tool-specific network stacks (like Chrome's in `chromedp`) require specialized interception (e.g., `network.SetRequestPaused`) to be fully secured, as a simple entry-point URL check is insufficient against redirects or malicious sub-resources.
+**Prevention:** Maintain a comprehensive and expanding list of blocked ports and non-routable CIDRs. For browser-based tools, investigate Chrome DevTools Protocol (CDP) level request interception to enforce SSRF policies consistently across the entire network stack.

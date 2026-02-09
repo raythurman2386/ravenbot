@@ -20,13 +20,26 @@ var (
 		"53":    true, // DNS
 		"110":   true, // POP3
 		"143":   true, // IMAP
+		"445":   true, // SMB
+		"161":   true, // SNMP
+		"2049":  true, // NFS
+		"2379":  true, // etcd client
+		"2380":  true, // etcd peer
 		"3306":  true, // MySQL
+		"4243":  true, // Docker API (alternative)
+		"5000":  true, // Docker Registry
 		"5432":  true, // PostgreSQL
+		"5985":  true, // WinRM (HTTP)
+		"5986":  true, // WinRM (HTTPS)
 		"6379":  true, // Redis
+		"7001":  true, // WebLogic
 		"9000":  true, // PHP-FPM / FastCGI
+		"9200":  true, // Elasticsearch (HTTP)
+		"9300":  true, // Elasticsearch (Nodes)
 		"2375":  true, // Docker API (unencrypted)
 		"2376":  true, // Docker API (TLS)
 		"6443":  true, // Kubernetes API
+		"11211": true, // Memcached
 		"27017": true, // MongoDB
 	}
 
@@ -39,11 +52,15 @@ func init() {
 		"100.64.0.0/10",   // CGNAT (RFC 6598)
 		"192.0.0.0/24",    // IETF Protocol Assignments (RFC 6890)
 		"192.0.2.0/24",    // Documentation TEST-NET-1 (RFC 5737)
+		"192.88.99.0/24",  // 6to4 Relay Anycast (RFC 3068)
 		"198.18.0.0/15",   // Benchmarking (RFC 2544)
 		"198.51.100.0/24", // Documentation TEST-NET-2 (RFC 5737)
 		"203.0.113.0/24",  // Documentation TEST-NET-3 (RFC 5737)
 		"240.0.0.0/4",     // Reserved (RFC 1112)
 		"100::/64",        // Discard-Only (RFC 6666)
+		"2001:2::/48",     // IPv6 Benchmarking (RFC 5180)
+		"2001:10::/28",    // ORCHID (RFC 4843)
+		"2001:20::/28",    // ORCHIDv2 (RFC 7343)
 		"2001:db8::/32",   // Documentation (RFC 3849)
 	}
 	for _, cidr := range cidrs {
