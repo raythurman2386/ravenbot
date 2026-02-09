@@ -27,6 +27,11 @@ func TestValidateURL(t *testing.T) {
 		{"Documentation Range (TEST-NET-1)", "http://192.0.2.1", false, true},
 		{"Benchmarking Range", "http://198.18.0.1", false, true},
 		{"IPv6 Documentation", "http://[2001:db8::1]", false, true},
+		{"6to4 Relay Anycast", "http://192.88.99.1", false, true},
+		{"IPv6 Benchmarking", "http://[2001:2::1]", false, true},
+		{"ORCHID", "http://[2001:10::1]", false, true},
+		{"Blocked port 445 (SMB)", "http://example.com:445", false, true},
+		{"Blocked port 9200 (Elasticsearch)", "http://example.com:9200", false, true},
 		{"Allow local URLs", "http://127.0.0.1", true, false},
 	}
 
