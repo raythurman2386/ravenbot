@@ -27,6 +27,7 @@ services:
       - .:/src
       - ./daily_logs:/app/daily_logs
       - ./data:/app/data
+      - ./logs:/app/logs
       - /usr/local/bin/goweathermcp:/usr/local/bin/goweathermcp
       - /usr/local/bin/sysmetrics-mcp:/usr/local/bin/sysmetrics-mcp
       - /var/run/docker.sock:/var/run/docker.sock

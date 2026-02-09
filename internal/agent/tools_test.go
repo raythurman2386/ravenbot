@@ -5,7 +5,6 @@ import (
 	"testing"
 
 	"github.com/raythurman2386/ravenbot/internal/config"
-	"github.com/raythurman2386/ravenbot/internal/mcp"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -19,51 +18,13 @@ func TestGetRavenTools(t *testing.T) {
 		},
 	}
 
-	// Test Technical Tools
+	// Technical tools should now be empty by default
 	techTools := a.GetTechnicalTools()
-	assert.NotEmpty(t, techTools, "Technical tools should not be empty")
-
-	// Verify specific tools
-	techNames := []string{"FetchRSS", "ScrapePage", "BrowseWeb", "WebSearch"}
-	for _, name := range techNames {
-		found := false
-		for _, tool := range techTools {
-			if tool.Name() == name {
-				found = true
-				break
-			}
-		}
-		assert.True(t, found, "Technical tool %s not found", name)
-	}
+	assert.Empty(t, techTools)
 
 	// Test Core Tools
 	coreTools := a.GetCoreTools()
-	assert.NotEmpty(t, coreTools)
-	// Jules tool is now dynamic and not in GetCoreTools, but appended in NewAgent.
-	// We only check for ReadMCPResource here as Jules is a sub-agent wrapper.
-	coreNames := []string{"ReadMCPResource"}
-	for _, name := range coreNames {
-		found := false
-		for _, tool := range coreTools {
-			if tool.Name() == name {
-				found = true
-				break
-			}
-		}
-		assert.True(t, found, "Core tool %s not found", name)
-	}
-}
-
-func TestGetMCPTools(t *testing.T) {
-	ctx := context.Background()
-
-	// Test the logic with an empty client map
-	a := &Agent{
-		mcpClients: make(map[string]*mcp.Client),
-	}
-
-	mcpTools := a.GetMCPTools(ctx)
-	assert.Empty(t, mcpTools)
+	assert.Empty(t, coreTools)
 }
 
 func TestClearSession(t *testing.T) {
@@ -71,8 +32,8 @@ func TestClearSession(t *testing.T) {
 	a := &Agent{sessionService: service}
 
 	ctx := context.Background()
-	userID := "default-user"
 	sessionID := "test-session"
+	userID := sessionID // userIDFromSession returns sessionID
 	appName := AppName
 
 	// Create a session

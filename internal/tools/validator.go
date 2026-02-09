@@ -141,7 +141,10 @@ func NewSafeClient(timeout time.Duration) *http.Client {
 					return nil, fmt.Errorf("restricted port: %s", port)
 				}
 
-				ips, _ := net.DefaultResolver.LookupIP(ctx, "ip", host)
+				ips, err := net.DefaultResolver.LookupIP(ctx, "ip", host)
+				if err != nil {
+					return nil, fmt.Errorf("DNS lookup failed for %s: %w", host, err)
+				}
 				for _, ip := range ips {
 					if !isRestrictedIP(ip) || os.Getenv("ALLOW_LOCAL_URLS") == "true" {
 						return (&net.Dialer{}).DialContext(ctx, network, net.JoinHostPort(ip.String(), port))

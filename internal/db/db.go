@@ -15,6 +15,19 @@ type DB struct {
 }
 
 // InitDB initializes the SQLite database and creates the schema.
+//
+// PRAGMAs are set via DSN query parameters so that every connection obtained
+// from the pool inherits them automatically:
+//   - busy_timeout(5000): wait up to 5 s when the database is locked instead
+//     of returning SQLITE_BUSY immediately.
+//   - journal_mode(WAL): write-ahead logging for concurrent read/write.
+//   - synchronous(NORMAL): safe with WAL and much faster than FULL.
+//   - foreign_keys(1): enforce FK constraints.
+//
+// MaxOpenConns is set to 1 because SQLite only supports a single writer;
+// funnelling all access through one connection avoids lock contention entirely.
+// The same *sql.DB is shared with GORM (ADK session service) via the Conn
+// field on the dialector, so both layers use this single pool.
 func InitDB(dbPath string) (*DB, error) {
 	// Ensure the directory exists
 	dir := filepath.Dir(dbPath)
@@ -22,18 +35,21 @@ func InitDB(dbPath string) (*DB, error) {
 		return nil, fmt.Errorf("failed to create database directory: %w", err)
 	}
 
-	db, err := sql.Open("sqlite", dbPath)
+	dsn := dbPath +
+		"?_pragma=busy_timeout(5000)" +
+		"&_pragma=journal_mode(WAL)" +
+		"&_pragma=synchronous(NORMAL)" +
+		"&_pragma=foreign_keys(1)" +
+		"&_txlock=immediate"
+
+	db, err := sql.Open("sqlite", dsn)
 	if err != nil {
 		return nil, fmt.Errorf("failed to open database: %w", err)
 	}
 
-	// Enable WAL mode and standard optimizations
-	if _, err := db.Exec("PRAGMA journal_mode=WAL;"); err != nil {
-		return nil, fmt.Errorf("failed to enable WAL mode: %w", err)
-	}
-	if _, err := db.Exec("PRAGMA synchronous=NORMAL;"); err != nil {
-		return nil, fmt.Errorf("failed to set synchronous mode: %w", err)
-	}
+	// SQLite only supports one writer at a time.  A single connection
+	// eliminates SQLITE_BUSY between goroutines sharing this pool.
+	db.SetMaxOpenConns(1)
 
 	if err := db.Ping(); err != nil {
 		return nil, fmt.Errorf("failed to ping database: %w", err)

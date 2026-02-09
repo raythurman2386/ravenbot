@@ -2,6 +2,7 @@ package handler
 
 import (
 	"context"
+	"strings"
 	"testing"
 	"time"
 
@@ -151,10 +152,7 @@ func TestHandleMessage_TooLong(t *testing.T) {
 	h, database := newTestHandler(t)
 	defer func() { _ = database.Close() }()
 
-	longText := ""
-	for i := 0; i < MaxInputLength+1; i++ {
-		longText += "a"
-	}
+	longText := strings.Repeat("a", MaxInputLength+1)
 
 	var got string
 	h.HandleMessage(context.Background(), "test-session", longText, nil, func(reply string) {

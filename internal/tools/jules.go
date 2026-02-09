@@ -108,10 +108,12 @@ func DelegateToJules(ctx context.Context, apiKey, repo, task string) (string, er
 	return fmt.Sprintf("Jules task initiated successfully. Session: %s", sessionName), nil
 }
 
-// truncateString truncates a string to the specified length.
+// truncateString truncates a string to the specified rune length,
+// preserving multi-byte UTF-8 characters.
 func truncateString(s string, maxLen int) string {
-	if len(s) <= maxLen {
+	runes := []rune(s)
+	if len(runes) <= maxLen {
 		return s
 	}
-	return s[:maxLen-3] + "..."
+	return string(runes[:maxLen-3]) + "..."
 }

@@ -1,71 +1,54 @@
 # Ravenbot MCP Architecture
 
 ## Overview
-To make `ravenbot` truly extensible and capable of leveraging the growing ecosystem of AI tools, it uses the **Model Context Protocol (MCP)**. This allows `ravenbot` to connect to external tools (servers) without modifying its core code.
+To make `ravenbot` truly extensible and capable of leveraging the official ecosystem of AI tools, it uses the **Model Context Protocol (MCP)** via the official Go SDK. This allows `ravenbot` to connect to external tools (servers) using industry-standard transports.
 
 ## Architecture
-`ravenbot` acts as an **MCP Client** (Host).
+`ravenbot` acts as an **MCP Host** using the `google.golang.org/adk/tool/mcptoolset` package.
 
 ```mermaid
 graph TD
-    Bot[RavenBot Core] -->|MCP Protocol| Manager[MCP Connection Manager]
-    Manager -->|Stdio/SSE| S1[Internal Tools Server]
-    Manager -->|Stdio| S2[Filesystem MCP Server]
-    Manager -->|Stdio| S3[Postgres MCP Server]
-    Manager -->|SSE| S4[Remote Weather Server]
+    Bot[RavenBot Core] -->|mcptoolset| SDK[Official MCP Go SDK]
+    SDK -->|CommandTransport| S1[Filesystem MCP]
+    SDK -->|CommandTransport| S2[Memory MCP]
+    SDK -->|SSEClientTransport| S3[Remote Services]
 ```
 
 ## Key Components
 
-### 1. Configuration (`internal/config`)
-MCP servers are defined in a `config.json` file.
+### 1. Configuration (`config.json`)
+MCP servers are defined centrally. The agent automatically initializes these during startup.
 ```json
 {
   "mcpServers": {
     "filesystem": {
       "command": "npx",
-      "args": ["-y", "@modelcontextprotocol/server-filesystem", "."]
+      "args": ["-y", "@modelcontextprotocol/server-filesystem", "/src", "/app"]
     }
   }
 }
 ```
 
-### 2. MCP Client (`internal/mcp`)
-The Go implementation of the MCP Client:
-- **Transport**: Supports `stdio` (executing a command and talking over stdin/stdout).
-- **Protocol**: JSON-RPC 2.0.
-- **Lifecycle**: Handles `initialize`, `tools/list`, and `tools/call`.
+### 2. Official Toolsets (`google.golang.org/adk/tool/mcptoolset`)
+Instead of a custom client, RavenBot uses the ADK's native `mcptoolset`:
+- **Standard Transports**: Leverages `mcp.CommandTransport` for local processes and `mcp.SSEClientTransport` for remote streams.
+- **Auto-Discovery**: Automatically queries servers for their available tools and capabilities.
+- **Schema Mapping**: Converts MCP tool schemas into Gemini-compatible function declarations.
 
-### 3. Tool Mapping (`internal/agent`)
-The `Agent` dynamically registers these tools with Gemini:
-- Iterates over connected MCP servers.
-- Fetches tool definitions (`name`, `description`, `input_schema`).
-- Converts JSON Schema to `genai.Schema`.
-- Namespaces tool names as `serverName_toolName` to avoid collisions.
-
-### 4. Execution Router
-When Gemini returns a `FunctionCall`:
-- Routes to native tools (e.g., `FetchRSS`) or namespaced MCP tools.
-- MCP calls are dispatched to the appropriate server via the connection manager.
-
-## Usage
-To add an MCP server, create or edit `config.json` in the root directory:
-```json
-{
-  "mcpServers": {
-    "filesystem": {
-      "command": "npx",
-      "args": ["-y", "@modelcontextprotocol/server-filesystem", "/home/user/allowed/path"]
-    },
-    "github": {
-      "command": "npx",
-      "args": ["-y", "@modelcontextprotocol/server-github"]
-    }
-  }
-}
-```
+### 3. Agent Integration
+Toolsets are injected into sub-agents (e.g., `SystemManager`, `Jules`) allowing them to select and invoke the most relevant tools for their specific domain.
 
 ## Benefits
-1.  **Zero-Code Extension**: New tools can be added just by editing a config file.
-2.  **Security**: MCP servers run in their own processes, isolating tool execution.
-3.  **Ecosystem**: Instant access to the official MCP server list (Google Drive, Slack, GitHub, SQLite, etc.).
+1.  **Production Grade**: Built on the official `modelcontextprotocol/go-sdk`, ensuring compliance with the evolving spec.
+2.  **Robust Transports**: Handles process lifecycles and stream reconnections natively.
+3.  **Unified Tooling**: MCP tools appear to the agent exactly like native Go functions, allowing for seamless reasoning.
+
+## Usage
+To add a new capability, simply add the server to `config.json`. For example, to add Google Maps support:
+```json
+"google-maps": {
+  "command": "npx",
+  "args": ["-y", "@modelcontextprotocol/server-google-maps"]
+}
+```
+RavenBot will discover the new tools on the next restart and make them available to the sub-agents.

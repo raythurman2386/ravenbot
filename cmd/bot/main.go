@@ -3,9 +3,11 @@ package main
 import (
 	"context"
 	"fmt"
+	"io"
 	"log/slog"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"syscall"
 	"time"
 
@@ -23,8 +25,21 @@ func main() {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	// Initialize structured logger
-	logger := slog.New(slog.NewJSONHandler(os.Stdout, nil))
+	// Initialize structured logging to both stdout and file
+	logDir := "logs"
+	if err := os.MkdirAll(logDir, 0755); err != nil {
+		fmt.Printf("Failed to create log directory: %v\n", err)
+		os.Exit(1)
+	}
+	logFile, err := os.OpenFile(filepath.Join(logDir, "combined.log"), os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+	if err != nil {
+		fmt.Printf("Failed to open log file: %v\n", err)
+		os.Exit(1)
+	}
+	defer logFile.Close()
+
+	multiWriter := io.MultiWriter(os.Stdout, logFile)
+	logger := slog.New(slog.NewJSONHandler(multiWriter, &slog.HandlerOptions{Level: slog.LevelInfo}))
 	slog.SetDefault(logger)
 
 	cfg, err := config.LoadConfig()
@@ -47,7 +62,7 @@ func main() {
 	scheduler := cronlib.NewCron()
 	botStats := stats.New()
 
-	bot, err := agent.NewAgent(ctx, cfg, database, botStats, sqlite.Open(cfg.DBPath))
+	bot, err := agent.NewAgent(ctx, cfg, database, botStats, &sqlite.Dialector{Conn: database.DB})
 	if err != nil {
 		slog.Error("Failed to create agent", "error", err)
 		os.Exit(1)
@@ -103,7 +118,6 @@ func main() {
 
 	// Schedule jobs from config
 	for _, job := range cfg.Jobs {
-		job := job // Capture loop variable
 		_, err = scheduler.AddJobWithOptions(job.Schedule, func(ctx context.Context) {
 			h.RunJob(ctx, job)
 		}, cronlib.JobOptions{
@@ -137,8 +151,8 @@ func main() {
 
 	<-sigChan
 	slog.Info("Shutting down ravenbot...")
+	cancel() // Signal context cancellation first so MCP children and goroutines stop
 	scheduler.Stop()
 	bot.Close()
-	cancel()
 	slog.Info("ravenbot stopped gracefully.")
 }

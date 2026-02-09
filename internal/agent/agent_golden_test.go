@@ -87,10 +87,10 @@ func TestChat_Golden(t *testing.T) {
 	ctx := context.Background()
 	sessionID := "test-session-golden"
 
-	// Create the session explicitly
+	// Create the session explicitly — userID must match what Chat() derives
 	_, err = sessionService.Create(ctx, &session.CreateRequest{
 		SessionID: sessionID,
-		UserID:    "default-user",
+		UserID:    sessionID, // Chat() uses userIDFromSession(sessionID) == sessionID
 		AppName:   "test-app",
 	})
 	require.NoError(t, err)

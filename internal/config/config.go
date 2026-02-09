@@ -22,17 +22,13 @@ type JobConfig struct {
 }
 
 type BotConfig struct {
-	SystemPrompt         string  `json:"systemPrompt"`
-	ResearchSystemPrompt string  `json:"researchSystemPrompt"`
-	SystemManagerPrompt  string  `json:"systemManagerPrompt"`
-	JulesPrompt          string  `json:"julesPrompt"`
-	FlashTokenLimit      int64   `json:"flashTokenLimit"`
-	ProTokenLimit        int64   `json:"proTokenLimit"`
-	TokenThreshold       float64 `json:"tokenThreshold"`
-	SummaryPrompt        string  `json:"summaryPrompt"`
-	HelpMessage          string  `json:"helpMessage"`
-	StatusPrompt         string  `json:"statusPrompt"`
-	RoutingPrompt        string  `json:"routingPrompt"`
+	SystemPrompt         string `json:"systemPrompt"`
+	ResearchSystemPrompt string `json:"researchSystemPrompt"`
+	SystemManagerPrompt  string `json:"systemManagerPrompt"`
+	JulesPrompt          string `json:"julesPrompt"`
+	HelpMessage          string `json:"helpMessage"`
+	StatusPrompt         string `json:"statusPrompt"`
+	RoutingPrompt        string `json:"routingPrompt"`
 }
 
 // Supported AI backend values.
@@ -65,7 +61,6 @@ type Config struct {
 	Bot              BotConfig                  `json:"bot"`
 	MCPServers       map[string]MCPServerConfig `json:"mcpServers"`
 	Jobs             []JobConfig                `json:"jobs"`
-	AllowedCommands  []string                   `json:"allowedCommands"`
 }
 
 func LoadConfig() (*Config, error) {
@@ -99,14 +94,14 @@ func LoadConfig() (*Config, error) {
 			cfg.GeminiFlashModel = os.Getenv("FLASH_MODEL")
 		}
 		if cfg.GeminiFlashModel == "" {
-			cfg.GeminiFlashModel = "gemini-3.0-flash-preview"
+			cfg.GeminiFlashModel = "gemini-2.5-flash"
 		}
 		cfg.GeminiProModel = os.Getenv("GEMINI_PRO_MODEL")
 		if cfg.GeminiProModel == "" {
 			cfg.GeminiProModel = os.Getenv("PRO_MODEL")
 		}
 		if cfg.GeminiProModel == "" {
-			cfg.GeminiProModel = "gemini-3.0-pro-preview"
+			cfg.GeminiProModel = "gemini-2.5-pro"
 		}
 	case BackendOllama:
 		cfg.OllamaBaseURL = os.Getenv("OLLAMA_BASE_URL")
@@ -131,14 +126,6 @@ func LoadConfig() (*Config, error) {
 		slog.Info("Loaded configuration from config.json")
 	} else {
 		slog.Warn("No config.json found, relying on environment variables only")
-	}
-
-	// Set defaults if still zero
-	if cfg.Bot.FlashTokenLimit <= 0 {
-		cfg.Bot.FlashTokenLimit = 1000000 // Default to 1M
-	}
-	if cfg.Bot.ProTokenLimit <= 0 {
-		cfg.Bot.ProTokenLimit = 1000000 // Default to 1M
 	}
 
 	// Optional configurations for notifiers

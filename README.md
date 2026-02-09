@@ -2,29 +2,24 @@
 
 ravenbot is a high-performance, self-hosted autonomous AI agent built in **Go 1.25.6** using the **Google Agent Development Kit (ADK)**. It functions as a proactive technical assistant that researches the latest trends in Golang, AI/LLM, and Geospatial Engineering, delivering high-quality briefings directly to your pocket.
 
-Equipped with a pluggable AI backend supporting **Google Vertex AI** (Gemini 3 Pro/Flash) and **Ollama** (local models), ravenbot can browse the web, execute system commands, and delegate complex tasks to specialized sub-agents.
+Equipped with a pluggable AI backend supporting **Google Gemini** (Gemini 2.0/Flash) and **Ollama** (local models), ravenbot leverages native grounding and specialized sub-agents to deliver factual, real-time intelligence.
 
 ---
 
 ## 🚀 Key Features
 
 ### 🧠 Advanced Intelligence
-- **Flash-First Routing**: Uses **Gemini 3 Flash** to intelligently classify prompts as "Simple" or "Complex", routing them to the optimal model to balance speed and reasoning depth.
+- **Flash-First Routing**: Uses **Gemini Flash** to intelligently classify prompts as "Simple" or "Complex", routing them to the optimal model to balance speed and reasoning depth.
 - **Active Sub-Agents**:
-  - **ResearchAssistant**: A dedicated **Gemini 3 Pro** powered sub-agent for deep technical research, web search, and data aggregation.
-  - **SystemManager**: A specialized agent for system diagnostics and health monitoring using native system metrics.
-  - **Jules**: An AI software engineer capable of managing repositories, performing coding tasks, and interacting with GitHub.
-- **Smart Tools**: Equipped with a professional native toolbelt:
-  - **GoogleSearch**: Integrated search tool for ground-truth verification.
-  - **FetchRSS**: Real-time news gathering with automatic database deduplication.
-  - **ScrapePage**: High-fidelity text extraction from technical articles.
-  - **BrowseWeb**: A headless browser pilot (`chromedp`) for JS-heavy dynamic websites.
-  - **Memory Tools**: Active context management to personalize interactions based on history.
+  - **ResearchAssistant**: A specialized agent for deep technical research. It coordinates complex missions and delegates web searches to the `SearchAssistant`.
+  - **SearchAssistant**: A dedicated sub-agent powered by **geminitool.GoogleSearch**. By isolating search, RavenBot leverages Gemini 2.0's official grounding while maintaining compatibility with other tools.
+  - **SystemManager**: A specialized agent for system diagnostics and health monitoring using official MCP toolsets.
+  - **Jules**: An AI software engineer capable of managing repositories and performing coding tasks.
+- **Production Grounding**: Uses official **Google Search** grounding for high-accuracy, up-to-date technical research.
 
-### 🔌 Multi-Server MCP Integration
-ravenbot supports the **Model Context Protocol (MCP)**, allowing it to seamlessly use tools from multiple servers:
+### 🔌 Official MCP Integration
+ravenbot utilizes the official **Model Context Protocol (MCP)** SDK, allowing it to seamlessly use tools from multiple servers:
 - **Filesystem**: Safe file operations within allowed directories.
-- **GitHub**: Repository management, PR creation, and version control (via `Jules`).
 - **Memory**: Personalized long-term context storage using a dedicated knowledge graph.
 - **Weather**: Real-time environmental data.
 - **System Metrics**: Real-time system health monitoring (CPU, Memory, Disk) via `sysmetrics`.
@@ -39,7 +34,7 @@ ravenbot supports the **Model Context Protocol (MCP)**, allowing it to seamlessl
 - **Secure by Design**: Restricted message processing to authorized Chat/Channel IDs and built-in SSRF protection.
 
 ### 💾 Persistence & Memory
-- **SQLite Engine**: Tracks headlines to ensure you never receive duplicate news.
+- **SQLite Engine**: Tracks headlines and briefings to ensure active knowledge management.
 - **Context Compression**: Automatically summarizes long conversations when token thresholds are reached to maintain performance.
 
 ---
@@ -49,9 +44,8 @@ ravenbot supports the **Model Context Protocol (MCP)**, allowing it to seamlessl
 - **Core**: Go 1.25.6
 - **Framework**: [google.golang.org/adk](https://pkg.go.dev/google.golang.org/adk) (v0.4.0)
 - **AI Backend**: Pluggable — **Google AI (Gemini)** or **Ollama** (selected via `AI_BACKEND` env var)
-- **AI Models**: Gemini 3.0 Pro & Flash (Google AI) or any Ollama-compatible model (e.g., Qwen, Llama)
+- **AI Models**: Gemini 2.0 Pro & Flash (Google AI) or any Ollama-compatible model.
 - **Scheduler**: [github.com/raythurman2386/cronlib](https://github.com/raythurman2386/cronlib)
-- **Browser**: `chromedp` (v0.14.2)
 - **Database**: `modernc.org/sqlite` (v1.44.3)
 - **Infrastructure**: Docker & Docker Compose (Optimized for ARM64/Raspberry Pi 5)
 
@@ -65,7 +59,6 @@ ravenbot supports the **Model Context Protocol (MCP)**, allowing it to seamlessl
 - **For Ollama backend**: A running [Ollama](https://ollama.com/) instance (local or remote)
 - (Optional) Telegram/Discord Bot Tokens
 - (Optional) Jules Agent API Key
-- (Optional) GitHub Personal Access Token (for MCP)
 
 ### 2. Deployment (Docker)
 ravenbot is designed to run 24/7 in a lightweight Docker container.
@@ -77,17 +70,11 @@ cd ravenbot
 
 # Set up your environment
 cp .env.example .env
-# Edit .env — set AI_BACKEND to "vertex" or "ollama" and configure accordingly
-
-# For Vertex AI: place your GCP service account key
-mkdir -p credentials
-cp /path/to/your/service-account.json credentials/
+# Edit .env — set AI_BACKEND to "gemini" or "ollama" and configure accordingly
 
 # Launch the agent
 docker compose up -d --build
 ```
-
-
 
 ---
 
@@ -98,29 +85,14 @@ docker compose up -d --build
 |----------|-------------|
 | `AI_BACKEND` | AI backend to use: `gemini` (default) or `ollama`. |
 | `GEMINI_API_KEY` | **Required for Gemini**. Your Google AI Studio API Key. |
-| `GOOGLE_APPLICATION_CREDENTIALS` | Path to GCP service account key (set automatically in Docker). |
 | `OLLAMA_BASE_URL` | Ollama API URL (default: `http://localhost:11434/v1`). |
 | `OLLAMA_MODEL` | Default Ollama model for both Flash and Pro tiers. |
-| `OLLAMA_FLASH_MODEL` | Optional: override model for the Flash (fast) tier. |
-| `OLLAMA_PRO_MODEL` | Optional: override model for the Pro (reasoning) tier. |
 | `TELEGRAM_BOT_TOKEN` | Token for the Telegram bot. |
 | `TELEGRAM_CHAT_ID` | Authorized Telegram Chat ID. |
 | `DISCORD_BOT_TOKEN` | Token for the Discord bot. |
 | `DISCORD_CHANNEL_ID` | Authorized Discord Channel ID. |
 | `JULES_API_KEY` | API Key for Jules Agent delegation. |
-| `GITHUB_PERSONAL_ACCESS_TOKEN` | Token for GitHub MCP tools. |
 | `ALLOW_LOCAL_URLS` | Set to `true` to allow access to local/private IPs (default: `false`). |
-
-### Active MCP Servers (config.json)
-MCP servers are defined in `config.json`. ravenbot automatically discovers and namespaces their tools (e.g., `github_create_issue`).
-
-The following servers are currently active:
-- **filesystem**: `@modelcontextprotocol/server-filesystem`
-- **sequential-thinking**: `@modelcontextprotocol/server-sequential-thinking`
-- **github**: `@modelcontextprotocol/server-github`
-- **memory**: `@modelcontextprotocol/server-memory`
-- **weather**: `goweathermcp`
-- **sysmetrics**: `sysmetrics-mcp`
 
 ---
 
@@ -128,11 +100,10 @@ The following servers are currently active:
 
 - `cmd/bot/`: Main application entry point and interactive loop.
 - `internal/agent/`: Core agent logic, routing, sub-agents, and ADK integration.
-- `internal/backend/`: Backend factory — creates `model.LLM` instances for Vertex AI or Ollama.
-- `internal/ollama/`: Ollama adapter implementing `model.LLM` via OpenAI-compatible API.
-- `internal/tools/`: Native tool implementations (Web, RSS, Shell, Browser, Jules).
-- `internal/mcp/`: Custom MCP client for Stdio and SSE transports.
-- `internal/db/`: Persistence layer (SQLite) for headlines and briefings.
+- `internal/backend/`: Backend factory — creates `model.LLM` instances.
+- `internal/ollama/`: Ollama adapter implementing `model.LLM`.
+- `internal/tools/`: Custom tool implementations (Jules, Validator).
+- `internal/db/`: Persistence layer (SQLite) for briefings and reminders.
 - `internal/notifier/`: Messaging integrations (Telegram, Discord).
 - `internal/config/`: Configuration and environment loading.
 - `daily_logs/`: Local storage for generated Markdown reports.

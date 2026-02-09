@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"iter"
 	"log/slog"
+	"os"
+	"os/exec"
 	"strings"
 	"sync"
 	"time"
@@ -12,10 +14,10 @@ import (
 	"github.com/raythurman2386/ravenbot/internal/backend"
 	"github.com/raythurman2386/ravenbot/internal/config"
 	raven "github.com/raythurman2386/ravenbot/internal/db"
-	"github.com/raythurman2386/ravenbot/internal/mcp"
 	"github.com/raythurman2386/ravenbot/internal/stats"
 	"github.com/raythurman2386/ravenbot/internal/tools"
 
+	officialmcp "github.com/modelcontextprotocol/go-sdk/mcp"
 	"google.golang.org/adk/agent"
 	"google.golang.org/adk/agent/llmagent"
 	"google.golang.org/adk/model"
@@ -24,6 +26,7 @@ import (
 	adkdb "google.golang.org/adk/session/database"
 	"google.golang.org/adk/tool"
 	"google.golang.org/adk/tool/functiontool"
+	"google.golang.org/adk/tool/mcptoolset"
 	"google.golang.org/genai"
 	"gorm.io/gorm"
 )
@@ -31,12 +34,9 @@ import (
 const AppName = "ravenbot"
 
 type Agent struct {
-	cfg            *config.Config
-	db             *raven.DB
-	stats          *stats.Stats
-	mcpClients     map[string]*mcp.Client
-	browserManager *tools.BrowserManager
-	mu             sync.RWMutex
+	cfg   *config.Config
+	db    *raven.DB
+	stats *stats.Stats
 
 	// ADK components
 	flashLLM model.LLM
@@ -47,20 +47,19 @@ type Agent struct {
 
 	sessionService session.Service
 
-	// Tool storage for missions and sub-agents
-	technicalTools   []tool.Tool
-	researchMCPTools []tool.Tool
+	// Sub-agents
+	researchAssistant agent.Agent
+	systemManager     agent.Agent
+	julesAgent        agent.Agent
 }
 
 func NewAgent(ctx context.Context, cfg *config.Config, database *raven.DB, botStats *stats.Stats, dialector gorm.Dialector) (*Agent, error) {
-	slog.Info("Initializing agent", "backend", cfg.AIBackend)
+	slog.Info("Initializing production agent", "backend", cfg.AIBackend)
 
 	a := &Agent{
-		cfg:            cfg,
-		db:             database,
-		stats:          botStats,
-		mcpClients:     make(map[string]*mcp.Client),
-		browserManager: tools.NewBrowserManager(ctx),
+		cfg:   cfg,
+		db:    database,
+		stats: botStats,
 	}
 
 	// 1. Initialize ADK Models (Flash & Pro) via configured backend
@@ -75,109 +74,106 @@ func NewAgent(ctx context.Context, cfg *config.Config, database *raven.DB, botSt
 		return nil, fmt.Errorf("failed to create Pro model: %w", err)
 	}
 
-	// 3. Initialize MCP Servers
-	var wg sync.WaitGroup
-	for name, serverCfg := range cfg.MCPServers {
-		wg.Add(1)
-		go func(name string, serverCfg config.MCPServerConfig) {
-			defer wg.Done()
-			slog.Info("Initializing MCP Server", "name", name, "command", serverCfg.Command)
-			var mcpClient *mcp.Client
-			if strings.HasPrefix(serverCfg.Command, "http://") || strings.HasPrefix(serverCfg.Command, "https://") {
-				mcpClient = mcp.NewSSEClient(serverCfg.Command)
-			} else {
-				mcpClient = mcp.NewStdioClient(serverCfg.Command, serverCfg.Args, serverCfg.Env)
-			}
-
-			if err := mcpClient.Start(); err != nil {
-				slog.Error("Failed to start MCP server", "name", name, "error", err)
-				return
-			}
-
-			if err := mcpClient.Initialize(); err != nil {
-				slog.Error("Failed to initialize MCP server", "name", name, "error", err)
-				if err := mcpClient.Close(); err != nil {
-					slog.Error("Failed to close MCP client", "name", name, "error", err)
-				}
-				return
-			}
-
-			a.mu.Lock()
-			a.mcpClients[name] = mcpClient
-			a.mu.Unlock()
-		}(name, serverCfg)
-	}
-	wg.Wait()
-
-	// 4. Initialize Session Service (SQLite Persistent via GORM Dialector)
+	// 2. Initialize Session Service (SQLite Persistent via GORM Dialector)
 	sessionService, err := adkdb.NewSessionService(dialector)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create ADK session service: %w", err)
 	}
 
-	// Auto-migrate the session schema
 	if err := adkdb.AutoMigrate(sessionService); err != nil {
 		return nil, fmt.Errorf("failed to auto-migrate session schema: %w", err)
 	}
-
 	a.sessionService = sessionService
 
-	// 5. Gather Tools and Create Sub-Agents
-	a.technicalTools = a.GetTechnicalTools()
-	mcpTools := a.GetMCPTools(ctx)
+	// 3. Initialize MCP Servers — keyed by server name for targeted assignment
+	mcpToolsetsByName := make(map[string]tool.Toolset)
+	var mcpWG sync.WaitGroup
+	var mcpMu sync.Mutex
+
+	for name, serverCfg := range cfg.MCPServers {
+		mcpWG.Add(1)
+		go func(name string, serverCfg config.MCPServerConfig) {
+			defer mcpWG.Done()
+
+			slog.Info("Initializing official MCP Toolset", "name", name)
+			var transport officialmcp.Transport
+			if strings.HasPrefix(serverCfg.Command, "http://") || strings.HasPrefix(serverCfg.Command, "https://") {
+				transport = &officialmcp.SSEClientTransport{Endpoint: serverCfg.Command}
+			} else {
+				cmd := exec.Command(serverCfg.Command, serverCfg.Args...)
+				if len(serverCfg.Env) > 0 {
+					cmd.Env = os.Environ()
+					for k, v := range serverCfg.Env {
+						cmd.Env = append(cmd.Env, fmt.Sprintf("%s=%s", k, os.ExpandEnv(v)))
+					}
+				}
+				transport = &officialmcp.CommandTransport{Command: cmd}
+			}
+
+			ts, err := mcptoolset.New(mcptoolset.Config{
+				Transport: transport,
+			})
+			if err != nil {
+				slog.Error("Failed to create MCP toolset", "name", name, "error", err)
+				return
+			}
+
+			mcpMu.Lock()
+			mcpToolsetsByName[name] = ts
+			mcpMu.Unlock()
+		}(name, serverCfg)
+	}
+	mcpWG.Wait()
+
+	// Build targeted MCP toolset slices per sub-agent.
+	// ResearchAssistant: weather, memory, filesystem, sequential-thinking
+	// SystemManager:     sysmetrics
+	// Jules:             github
+	researchMCPNames := []string{"weather", "memory", "filesystem", "sequential-thinking"}
+	systemMCPNames := []string{"sysmetrics"}
+	julesMCPNames := []string{"github"}
+
+	collectToolsets := func(names []string) []tool.Toolset {
+		var ts []tool.Toolset
+		for _, n := range names {
+			if t, ok := mcpToolsetsByName[n]; ok {
+				ts = append(ts, t)
+			} else {
+				slog.Warn("MCP toolset not available for agent assignment", "name", n)
+			}
+		}
+		return ts
+	}
+
+	researchToolsets := collectToolsets(researchMCPNames)
+	systemToolsets := collectToolsets(systemMCPNames)
+	julesToolsets := collectToolsets(julesMCPNames)
+
+	// 5. Create Sub-Agents
+	technicalTools := a.GetTechnicalTools()
 	coreTools := a.GetCoreTools()
 
-	var rootMCPTools []tool.Tool
-	var systemManagerMCPTools []tool.Tool
-	var githubMCPTools []tool.Tool
-
-	for _, t := range mcpTools {
-		name := t.Name()
-		// Memory tools are shared between the root agent and research assistant
-		if strings.HasPrefix(name, "memory_") {
-			rootMCPTools = append(rootMCPTools, t)
-			a.researchMCPTools = append(a.researchMCPTools, t)
-		} else if strings.HasPrefix(name, "sysmetrics") {
-			systemManagerMCPTools = append(systemManagerMCPTools, t)
-		} else if strings.HasPrefix(name, "github") {
-			githubMCPTools = append(githubMCPTools, t)
-		} else {
-			a.researchMCPTools = append(a.researchMCPTools, t)
-		}
-	}
-
-	// Create Research Assistant Sub-Agent (Uses Flash Model for speed and efficiency)
-	researchAssistant, err := llmagent.New(llmagent.Config{
-		Name:        "ResearchAssistant",
-		Model:       a.flashLLM,
-		Description: "A specialized assistant for technical research.",
-		Instruction: cfg.Bot.ResearchSystemPrompt,
-		Tools:       append(a.technicalTools, a.researchMCPTools...),
-	})
-	if err != nil {
-		return nil, fmt.Errorf("failed to create ResearchAssistant: %w", err)
-	}
-
-	// Create System Manager Sub-Agent (Uses Flash Model)
+	// Create System Manager Sub-Agent
 	systemManagerAgent, err := llmagent.New(llmagent.Config{
 		Name:        "SystemManager",
 		Model:       a.flashLLM,
 		Description: "A specialized assistant for system diagnostics and health checks.",
 		Instruction: cfg.Bot.SystemManagerPrompt,
-		Tools:       systemManagerMCPTools,
+		Toolsets:    systemToolsets,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("failed to create SystemManager: %w", err)
 	}
+	a.systemManager = systemManagerAgent
 
-	// Wrap JulesTask as a Tool (External Service) - Available to the Jules Sub-Agent
+	// JulesTask Tool
 	type JulesTaskArgs struct {
 		Repo string `json:"repo" jsonschema:"The repository in 'owner/repo' format."`
 		Task string `json:"task" jsonschema:"The coding task description."`
 	}
 	julesTaskTool, err := functiontool.New(functiontool.Config{
 		Name:        "JulesTask",
-		Description: "Delegates a coding task to the external Jules service. REQUIRED for any code modification, refactoring, or repository creation. Do not use github_* tools for these actions.",
+		Description: "Delegates a coding task to the external Jules service. REQUIRED for any code modification, refactoring, or repository creation.",
 	}, func(ctx tool.Context, args JulesTaskArgs) (string, error) {
 		return tools.DelegateToJules(ctx, cfg.JulesAPIKey, args.Repo, args.Task)
 	})
@@ -185,22 +181,53 @@ func NewAgent(ctx context.Context, cfg *config.Config, database *raven.DB, botSt
 		return nil, fmt.Errorf("failed to create JulesTask tool: %w", err)
 	}
 
-	// Create Jules Sub-Agent (Uses Pro Model for coding)
+	// Create Jules Sub-Agent
 	julesAgent, err := llmagent.New(llmagent.Config{
 		Name:        "Jules",
 		Model:       a.proLLM,
 		Description: "A specialized AI software engineer for coding tasks and GitHub operations.",
 		Instruction: cfg.Bot.JulesPrompt,
-		Tools:       append(githubMCPTools, julesTaskTool),
+		Tools:       []tool.Tool{julesTaskTool},
+		Toolsets:    julesToolsets,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("failed to create Jules agent: %w", err)
 	}
+	a.julesAgent = julesAgent
 
-	// Final toolset for the Root Agent
-	allRootTools := append(coreTools, rootMCPTools...)
+	// Create Research Assistant Sub-Agent
+	// Use a custom web_search function tool that wraps a standalone Gemini API
+	// call with GoogleSearch grounding. This avoids the Gemini API restriction
+	// that prevents mixing grounding tools with function-calling tools (which
+	// the ADK injects via transfer_to_agent and MCP toolsets).
+	type WebSearchArgs struct {
+		Query string `json:"query" jsonschema:"The search query to look up on the web."`
+	}
+	webSearchTool, err := functiontool.New(functiontool.Config{
+		Name:        "web_search",
+		Description: "Search the web using Google Search to find current, up-to-date information. Use this for any question requiring recent data, news, documentation, or facts you are unsure about.",
+	}, func(ctx tool.Context, args WebSearchArgs) (string, error) {
+		return tools.WebSearch(ctx, cfg.GeminiAPIKey, cfg.GeminiFlashModel, args.Query)
+	})
+	if err != nil {
+		return nil, fmt.Errorf("failed to create web_search tool: %w", err)
+	}
 
-	// Instruction provider logic
+	researchTools := append(technicalTools, webSearchTool)
+	researchAssistant, err := llmagent.New(llmagent.Config{
+		Name:        "ResearchAssistant",
+		Model:       a.flashLLM,
+		Description: "A specialized assistant for technical research and web searches.",
+		Instruction: cfg.Bot.ResearchSystemPrompt + "\n\nUse the web_search tool for all web searches to find up-to-date information.",
+		Tools:       researchTools,
+		Toolsets:    researchToolsets,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("failed to create ResearchAssistant: %w", err)
+	}
+	a.researchAssistant = researchAssistant
+
+	// 6. Instruction provider logic
 	instructionProvider := func(ctx agent.ReadonlyContext) (string, error) {
 		var summary string
 		var err error
@@ -217,35 +244,16 @@ func NewAgent(ctx context.Context, cfg *config.Config, database *raven.DB, botSt
 		return a.cfg.Bot.SystemPrompt, nil
 	}
 
-	// Callback factory for context compression
-	makeCompressionCallback := func(limit int64) llmagent.AfterModelCallback {
-		return func(ctx agent.CallbackContext, llmResponse *model.LLMResponse, llmResponseError error) (*model.LLMResponse, error) {
-			if llmResponseError != nil || llmResponse == nil || llmResponse.UsageMetadata == nil {
-				return llmResponse, llmResponseError
-			}
+	// 7. Create Root ADK LLMAgents
+	allSubAgents := []agent.Agent{researchAssistant, systemManagerAgent, julesAgent}
 
-			// Check if context needs compression
-			totalTokens := llmResponse.UsageMetadata.TotalTokenCount
-			threshold := float64(limit) * a.cfg.Bot.TokenThreshold
-
-			if float64(totalTokens) >= threshold {
-				slog.Info("Context window threshold reached, triggering compression", "sessionID", ctx.SessionID(), "tokens", totalTokens, "limit", limit)
-				go a.compressContext(ctx.SessionID())
-			}
-
-			return llmResponse, nil
-		}
-	}
-
-	// 6. Create Root ADK LLMAgents (One for Flash, one for Pro)
 	flashAgent, err := llmagent.New(llmagent.Config{
 		Name:                "ravenbot-flash",
 		Model:               a.flashLLM,
 		Description:         "RavenBot Flash Agent",
 		InstructionProvider: instructionProvider,
-		Tools:               allRootTools,
-		SubAgents:           []agent.Agent{researchAssistant, systemManagerAgent, julesAgent},
-		AfterModelCallbacks: []llmagent.AfterModelCallback{makeCompressionCallback(a.cfg.Bot.FlashTokenLimit)},
+		Tools:               coreTools,
+		SubAgents:           allSubAgents,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("failed to create flash agent: %w", err)
@@ -256,15 +264,14 @@ func NewAgent(ctx context.Context, cfg *config.Config, database *raven.DB, botSt
 		Model:               a.proLLM,
 		Description:         "RavenBot Pro Agent",
 		InstructionProvider: instructionProvider,
-		Tools:               allRootTools,
-		SubAgents:           []agent.Agent{researchAssistant, systemManagerAgent, julesAgent},
-		AfterModelCallbacks: []llmagent.AfterModelCallback{makeCompressionCallback(a.cfg.Bot.ProTokenLimit)},
+		Tools:               coreTools,
+		SubAgents:           allSubAgents,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("failed to create pro agent: %w", err)
 	}
 
-	// 7. Create ADK Runners
+	// 8. Create ADK Runners
 	flashRunner, err := runner.New(runner.Config{
 		AppName:        AppName,
 		Agent:          flashAgent,
@@ -288,55 +295,26 @@ func NewAgent(ctx context.Context, cfg *config.Config, database *raven.DB, botSt
 	return a, nil
 }
 
-// compressContext generates a summary of the session and clears it to free up the context window.
-func (a *Agent) compressContext(sessionID string) {
-	ctx := context.Background()
-	slog.Info("Generating conversation summary for compression", "sessionID", sessionID)
-
-	summary, err := a.RunMission(ctx, a.cfg.Bot.SummaryPrompt)
-	if err != nil {
-		slog.Error("Failed to generate summary for context compression", "sessionID", sessionID, "error", err)
-		return
-	}
-
-	if a.db != nil {
-		if err := a.db.SaveSessionSummary(ctx, sessionID, summary); err != nil {
-			slog.Error("Failed to persist session summary", "sessionID", sessionID, "error", err)
-		}
-	}
-
-	// Clear only the ADK session events/state to free up the window.
-	// We do NOT call a.ClearSession here because that would also delete the summary we just saved.
-	if err := a.sessionService.Delete(ctx, &session.DeleteRequest{
-		AppName:   AppName,
-		UserID:    "default-user",
-		SessionID: sessionID,
-	}); err != nil {
-		slog.Error("Failed to clear session during compression", "sessionID", sessionID, "error", err)
-	}
-
-	slog.Info("Context compressed successfully", "sessionID", sessionID)
-}
-
-// Close cleans up the agent's resources.
 func (a *Agent) Close() {
-	if a.browserManager != nil {
-		a.browserManager.Close()
-	}
+	// No-op: retained for interface compatibility.
+	// Browser and MCP cleanup happens via context cancellation.
 }
 
-// ClearSession removes a chat session (useful for /reset command)
-func (a *Agent) ClearSession(sessionID string) {
-	userID := "default-user"
-	ctx := context.Background()
+// userIDFromSession derives the ADK userID from the sessionID.
+// Session IDs already encode user uniqueness (e.g. "telegram-12345",
+// "discord-98765"), so we use the sessionID itself as the userID.
+func userIDFromSession(sessionID string) string {
+	return sessionID
+}
 
-	// Clear persisted summary when session is cleared
+func (a *Agent) ClearSession(sessionID string) {
+	userID := userIDFromSession(sessionID)
+	ctx := context.Background()
 	if a.db != nil {
 		if err := a.db.DeleteSessionSummary(ctx, sessionID); err != nil {
 			slog.Warn("Failed to delete session summary during clear", "sessionID", sessionID, "error", err)
 		}
 	}
-
 	if err := a.sessionService.Delete(ctx, &session.DeleteRequest{
 		AppName:   AppName,
 		UserID:    userID,
@@ -346,11 +324,8 @@ func (a *Agent) ClearSession(sessionID string) {
 	}
 }
 
-// classifyPrompt determines if the prompt is 'Simple' or 'Complex' using the Flash model.
-// Heavily biased towards "Simple" to maximize the usage of the highly capable Flash model.
 func (a *Agent) classifyPrompt(ctx context.Context, message string) string {
 	prompt := fmt.Sprintf(a.cfg.Bot.RoutingPrompt, message)
-
 	respIter := a.flashLLM.GenerateContent(ctx, &model.LLMRequest{
 		Contents: []*genai.Content{{
 			Role:  "user",
@@ -376,13 +351,10 @@ func (a *Agent) classifyPrompt(ctx context.Context, message string) string {
 	return "Simple"
 }
 
-// Chat handles conversational messages with session persistence and dynamic model routing.
 func (a *Agent) Chat(ctx context.Context, sessionID, message string) (string, error) {
 	slog.Info("Agent.Chat called", "sessionID", sessionID, "messageLength", len(message))
+	userID := userIDFromSession(sessionID)
 
-	userID := "default-user"
-
-	// Ensure session exists
 	_, err := a.sessionService.Get(ctx, &session.GetRequest{
 		AppName:   AppName,
 		UserID:    userID,
@@ -400,22 +372,16 @@ func (a *Agent) Chat(ctx context.Context, sessionID, message string) (string, er
 		}
 	}
 
-	// 1. Router Logic: Classify the prompt
 	classification := a.classifyPrompt(ctx, message)
 	var activeRunner *runner.Runner
-	var modelName string
-
 	if classification == "Simple" {
 		activeRunner = a.flashRunner
-		modelName = a.cfg.GeminiFlashModel
 	} else {
 		activeRunner = a.proRunner
-		modelName = a.cfg.GeminiProModel
 	}
 
-	slog.Info("Routed request", "classification", classification, "model", modelName)
+	slog.Info("Routed request", "classification", classification)
 
-	// 2. Run with selected model
 	events := activeRunner.Run(ctx, userID, sessionID, &genai.Content{
 		Role:  "user",
 		Parts: []*genai.Part{{Text: message}},
@@ -424,13 +390,10 @@ func (a *Agent) Chat(ctx context.Context, sessionID, message string) (string, er
 	return a.consumeRunnerEvents(sessionID, events)
 }
 
-// RunMission executes a one-shot research mission (no session persistence).
-// Missions now default to the Flash model for speed and efficiency.
 func (a *Agent) RunMission(ctx context.Context, prompt string) (string, error) {
 	missionID := fmt.Sprintf("mission-%d", time.Now().UnixNano())
 	userID := "mission-user"
 
-	// Create session for the mission
 	_, err := a.sessionService.Create(ctx, &session.CreateRequest{
 		AppName:   AppName,
 		UserID:    userID,
@@ -440,9 +403,14 @@ func (a *Agent) RunMission(ctx context.Context, prompt string) (string, error) {
 		return "", fmt.Errorf("failed to create mission session: %w", err)
 	}
 
-	// Ensure cleanup after mission
 	defer func() {
-		if err := a.sessionService.Delete(context.Background(), &session.DeleteRequest{
+		cleanupCtx := context.Background()
+		if a.db != nil {
+			if err := a.db.DeleteSessionSummary(cleanupCtx, missionID); err != nil {
+				slog.Warn("Failed to cleanup mission summary", "sessionID", missionID, "error", err)
+			}
+		}
+		if err := a.sessionService.Delete(cleanupCtx, &session.DeleteRequest{
 			AppName:   AppName,
 			UserID:    userID,
 			SessionID: missionID,
@@ -453,16 +421,15 @@ func (a *Agent) RunMission(ctx context.Context, prompt string) (string, error) {
 
 	missionAgent, err := llmagent.New(llmagent.Config{
 		Name:        "ravenbot-mission",
-		Model:       a.flashLLM, // Use Flash model for missions
+		Model:       a.flashLLM,
 		Description: "RavenBot research mission agent",
 		Instruction: a.cfg.Bot.ResearchSystemPrompt,
-		Tools:       append(a.technicalTools, a.researchMCPTools...),
+		SubAgents:   []agent.Agent{a.researchAssistant},
 	})
 	if err != nil {
 		return "", err
 	}
 
-	// Create a temporary runner for the mission
 	missionRunner, err := runner.New(runner.Config{
 		AppName:        AppName,
 		Agent:          missionAgent,
@@ -472,7 +439,7 @@ func (a *Agent) RunMission(ctx context.Context, prompt string) (string, error) {
 		return "", err
 	}
 
-	events := missionRunner.Run(ctx, "mission-user", missionID, &genai.Content{
+	events := missionRunner.Run(ctx, userID, missionID, &genai.Content{
 		Role:  "user",
 		Parts: []*genai.Part{{Text: prompt}},
 	}, agent.RunConfig{})
@@ -480,28 +447,36 @@ func (a *Agent) RunMission(ctx context.Context, prompt string) (string, error) {
 	return a.consumeRunnerEvents(missionID, events)
 }
 
-// consumeRunnerEvents processes the event stream from the ADK runner
 func (a *Agent) consumeRunnerEvents(sessionID string, events iter.Seq2[*session.Event, error]) (string, error) {
-	var lastText strings.Builder
+	var lastText string
 	for event, err := range events {
 		if err != nil {
 			slog.Error("ADK runner yielded error", "error", err)
-			msg := err.Error()
-			// Handle common ADK/Gemini turn order issues.
-			if strings.Contains(msg, "Error 400") && strings.Contains(msg, "function call turn") {
-				slog.Warn("Turn order corruption detected, performing emergency session reset", "sessionID", sessionID)
-				a.ClearSession(sessionID)
-				return "", fmt.Errorf("encountered a technical glitch in conversation turn order; session reset, please try again")
-			}
 			return "", fmt.Errorf("ADK runner error: %w", err)
 		}
-		if event.Content != nil {
-			for _, part := range event.Content.Parts {
-				if part.Text != "" {
-					lastText.WriteString(part.Text)
+
+		// Diagnostic: log every event for debugging
+		hasContent := event.Content != nil && len(event.Content.Parts) > 0
+		var textPreview string
+		if hasContent {
+			for _, p := range event.Content.Parts {
+				if p.Text != "" {
+					textPreview = p.Text
+					if len(textPreview) > 80 {
+						textPreview = textPreview[:80] + "..."
+					}
+					break
 				}
 			}
 		}
+		slog.Debug("ADK event",
+			"sessionID", sessionID,
+			"author", event.Author,
+			"isFinal", event.IsFinalResponse(),
+			"hasContent", hasContent,
+			"textPreview", textPreview,
+		)
+
 		// Track token usage from every event
 		if a.stats != nil && event.UsageMetadata != nil {
 			a.stats.RecordTokens(
@@ -509,9 +484,34 @@ func (a *Agent) consumeRunnerEvents(sessionID string, events iter.Seq2[*session.
 				int64(event.UsageMetadata.CandidatesTokenCount),
 			)
 		}
+
+		// Only collect text from final response events to avoid
+		// mixing intermediate sub-agent/tool output into the reply.
+		if !event.IsFinalResponse() {
+			if event.Content != nil {
+				for _, part := range event.Content.Parts {
+					if part.FunctionCall != nil {
+						slog.Info("Model called tool", "name", part.FunctionCall.Name, "args", part.FunctionCall.Args)
+					}
+				}
+			}
+			continue
+		}
+
+		if event.Content != nil {
+			var sb strings.Builder
+			for _, part := range event.Content.Parts {
+				if part.Text != "" {
+					sb.WriteString(part.Text)
+				}
+			}
+			if text := sb.String(); text != "" {
+				lastText = text
+			}
+		}
 	}
 
-	response := strings.TrimSpace(lastText.String())
+	response := strings.TrimSpace(lastText)
 	if response == "" {
 		return "", fmt.Errorf("no response from ADK agent")
 	}

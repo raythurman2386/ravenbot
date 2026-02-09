@@ -14,7 +14,7 @@ RUN go mod download
 COPY . .
 
 # Build the binary
-RUN CGO_ENABLED=0 GOOS=linux go build -o ravenbot ./cmd/bot/main.go
+RUN CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -ldflags="-s -w" -o ravenbot ./cmd/bot/main.go
 
 # Final stage
 FROM alpine:latest
@@ -24,8 +24,6 @@ FROM alpine:latest
 RUN apk add --no-cache \
     ca-certificates \
     tzdata \
-    chromium \
-    chromium-chromedriver \
     nss \
     freetype \
     harfbuzz \

@@ -380,10 +380,11 @@ type sseReader struct {
 type bufioReader struct {
 	r   io.Reader
 	buf []byte
+	eof bool // deferred EOF/error flag
 }
 
 func newSSEReader(r io.Reader) *sseReader {
-	return &sseReader{r: &bufioReader{r: r, buf: make([]byte, 0, 4096)}}
+	return &sseReader{r: &bufioReader{r: r, buf: make([]byte, 0, 4096), eof: false}}
 }
 
 func (r *bufioReader) ReadLine() (string, error) {
@@ -397,6 +398,16 @@ func (r *bufioReader) ReadLine() (string, error) {
 			}
 		}
 
+		// If we already hit EOF/error, drain whatever is left in the buffer
+		if r.eof {
+			if len(r.buf) > 0 {
+				line := string(r.buf)
+				r.buf = r.buf[:0]
+				return line, nil
+			}
+			return "", io.EOF
+		}
+
 		// Read more data
 		tmp := make([]byte, 1024)
 		n, err := r.r.Read(tmp)
@@ -404,12 +415,9 @@ func (r *bufioReader) ReadLine() (string, error) {
 			r.buf = append(r.buf, tmp[:n]...)
 		}
 		if err != nil {
-			if len(r.buf) > 0 {
-				line := string(r.buf)
-				r.buf = r.buf[:0]
-				return line, nil
-			}
-			return "", err
+			// Defer the error — loop back to scan the buffer for
+			// any remaining newline-delimited lines first.
+			r.eof = true
 		}
 	}
 }
@@ -428,9 +436,15 @@ func (s *sseReader) ReadEvent() (string, error) {
 }
 
 func (m *Model) convertToLLMResponse(msg *chatMessage, tokens int) *model.LLMResponse {
+	// Normalize Ollama's "assistant" role to Gemini/ADK's "model" role.
+	role := msg.Role
+	if role == "assistant" {
+		role = "model"
+	}
+
 	resp := &model.LLMResponse{
 		Content: &genai.Content{
-			Role:  msg.Role,
+			Role:  role,
 			Parts: make([]*genai.Part, 0),
 		},
 	}

@@ -34,7 +34,6 @@ func TestHasHeadline(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
 			got, err := db.HasHeadline(ctx, tt.url)
 			if err != nil {
@@ -64,7 +63,6 @@ func TestAddHeadline(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
 			err := db.AddHeadline(ctx, tt.title, tt.url)
 			if (err != nil) != tt.wantErr {
@@ -103,7 +101,6 @@ func TestGetExistingHeadlines(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
 			got, err := db.GetExistingHeadlines(ctx, tt.urls)
 			if err != nil {
