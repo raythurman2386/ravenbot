@@ -4,28 +4,10 @@ import (
 	"context"
 	"testing"
 
-	"github.com/raythurman2386/ravenbot/internal/config"
-
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/adk/session"
 )
-
-func TestGetRavenTools(t *testing.T) {
-	a := &Agent{
-		cfg: &config.Config{
-			JulesAPIKey: "test-key",
-		},
-	}
-
-	// Technical tools should now be empty by default
-	techTools := a.GetTechnicalTools()
-	assert.Empty(t, techTools)
-
-	// Test Core Tools
-	coreTools := a.GetCoreTools()
-	assert.Empty(t, coreTools)
-}
 
 func TestClearSession(t *testing.T) {
 	service := session.InMemoryService()
@@ -33,7 +15,7 @@ func TestClearSession(t *testing.T) {
 
 	ctx := context.Background()
 	sessionID := "test-session"
-	userID := sessionID // userIDFromSession returns sessionID
+	userID := sessionID
 	appName := AppName
 
 	// Create a session

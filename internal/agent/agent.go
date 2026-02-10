@@ -150,8 +150,6 @@ func NewAgent(ctx context.Context, cfg *config.Config, database *raven.DB, botSt
 	julesToolsets := collectToolsets(julesMCPNames)
 
 	// 5. Create Sub-Agents
-	technicalTools := a.GetTechnicalTools()
-	coreTools := a.GetCoreTools()
 
 	// Create System Manager Sub-Agent
 	systemManagerAgent, err := llmagent.New(llmagent.Config{
@@ -213,7 +211,7 @@ func NewAgent(ctx context.Context, cfg *config.Config, database *raven.DB, botSt
 		return nil, fmt.Errorf("failed to create web_search tool: %w", err)
 	}
 
-	researchTools := append(technicalTools, webSearchTool)
+	researchTools := []tool.Tool{webSearchTool}
 	researchAssistant, err := llmagent.New(llmagent.Config{
 		Name:        "ResearchAssistant",
 		Model:       a.flashLLM,
@@ -252,7 +250,7 @@ func NewAgent(ctx context.Context, cfg *config.Config, database *raven.DB, botSt
 		Model:               a.flashLLM,
 		Description:         "RavenBot Flash Agent",
 		InstructionProvider: instructionProvider,
-		Tools:               coreTools,
+		Tools:               nil,
 		SubAgents:           allSubAgents,
 	})
 	if err != nil {
@@ -264,7 +262,7 @@ func NewAgent(ctx context.Context, cfg *config.Config, database *raven.DB, botSt
 		Model:               a.proLLM,
 		Description:         "RavenBot Pro Agent",
 		InstructionProvider: instructionProvider,
-		Tools:               coreTools,
+		Tools:               nil,
 		SubAgents:           allSubAgents,
 	})
 	if err != nil {
@@ -300,15 +298,8 @@ func (a *Agent) Close() {
 	// Browser and MCP cleanup happens via context cancellation.
 }
 
-// userIDFromSession derives the ADK userID from the sessionID.
-// Session IDs already encode user uniqueness (e.g. "telegram-12345",
-// "discord-98765"), so we use the sessionID itself as the userID.
-func userIDFromSession(sessionID string) string {
-	return sessionID
-}
-
 func (a *Agent) ClearSession(sessionID string) {
-	userID := userIDFromSession(sessionID)
+	userID := sessionID
 	ctx := context.Background()
 	if a.db != nil {
 		if err := a.db.DeleteSessionSummary(ctx, sessionID); err != nil {
@@ -353,7 +344,7 @@ func (a *Agent) classifyPrompt(ctx context.Context, message string) string {
 
 func (a *Agent) Chat(ctx context.Context, sessionID, message string) (string, error) {
 	slog.Info("Agent.Chat called", "sessionID", sessionID, "messageLength", len(message))
-	userID := userIDFromSession(sessionID)
+	userID := sessionID
 
 	_, err := a.sessionService.Get(ctx, &session.GetRequest{
 		AppName:   AppName,
