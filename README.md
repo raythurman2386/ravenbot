@@ -2,17 +2,17 @@
 
 ravenbot is a high-performance, self-hosted autonomous AI agent built in **Go 1.25.6** using the **Google Agent Development Kit (ADK)**. It functions as a proactive technical assistant that researches the latest trends in Golang, AI/LLM, and Geospatial Engineering, delivering high-quality briefings directly to your pocket.
 
-Equipped with a pluggable AI backend supporting **Google Gemini** (Gemini 2.0/Flash) and **Ollama** (local models), ravenbot leverages native grounding and specialized sub-agents to deliver factual, real-time intelligence.
+Equipped with a pluggable AI backend supporting **Google Gemini** (Gemini 2.5/Flash) and **Ollama** (local models), ravenbot leverages native grounding and specialized sub-agents to deliver factual, real-time intelligence.
 
 ---
 
 ## 🚀 Key Features
 
 ### 🧠 Advanced Intelligence
-- **Flash-First Routing**: Uses **Gemini Flash** to intelligently classify prompts as "Simple" or "Complex", routing them to the optimal model to balance speed and reasoning depth.
+- **Flash-First Routing**: Uses **Gemini 2.5 Flash** to intelligently classify prompts as "Simple" or "Complex", routing them to the optimal model to balance speed and reasoning depth.
 - **Active Sub-Agents**:
   - **ResearchAssistant**: A specialized agent for deep technical research. It coordinates complex missions and delegates web searches to the `SearchAssistant`.
-  - **SearchAssistant**: A dedicated sub-agent powered by **geminitool.GoogleSearch**. By isolating search, RavenBot leverages Gemini 2.0's official grounding while maintaining compatibility with other tools.
+  - **SearchAssistant**: A dedicated sub-agent powered by **geminitool.GoogleSearch**. By isolating search, RavenBot leverages Gemini 2.5's official grounding while maintaining compatibility with other tools.
   - **SystemManager**: A specialized agent for system diagnostics and health monitoring using official MCP toolsets.
   - **Jules**: An AI software engineer capable of managing repositories and performing coding tasks.
 - **Production Grounding**: Uses official **Google Search** grounding for high-accuracy, up-to-date technical research.
@@ -44,7 +44,7 @@ ravenbot utilizes the official **Model Context Protocol (MCP)** SDK, allowing it
 - **Core**: Go 1.25.6
 - **Framework**: [google.golang.org/adk](https://pkg.go.dev/google.golang.org/adk) (v0.4.0)
 - **AI Backend**: Pluggable — **Google AI (Gemini)** or **Ollama** (selected via `AI_BACKEND` env var)
-- **AI Models**: Gemini 2.0 Pro & Flash (Google AI) or any Ollama-compatible model.
+- **AI Models**: Gemini 2.5 Pro & Flash (Google AI) or any Ollama-compatible model.
 - **Scheduler**: [github.com/raythurman2386/cronlib](https://github.com/raythurman2386/cronlib)
 - **Database**: `modernc.org/sqlite` (v1.44.3)
 - **Infrastructure**: Docker & Docker Compose (Optimized for ARM64/Raspberry Pi 5)
