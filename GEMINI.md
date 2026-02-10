@@ -19,8 +19,7 @@ This document provides structural and behavioral context for AI agents working o
 ├── cmd/bot/                # Application entry point and main event loop
 ├── internal/
 │   ├── agent/             # Core AI logic (Agent struct, Sub-agents, A2A delegation)
-│   │   ├── agent.go       # ADK Agent initialization and sub-agent tree
-│   │   └── tools.go       # Tool registration (Core, Technical)
+│   │   └── agent.go       # ADK Agent initialization, sub-agent tree, and tool registration
 │   ├── backend/           # Backend factory and Gemini role wrapper
 │   ├── ollama/            # Ollama adapter (OpenAI-compatible API → model.LLM)
 │   ├── tools/             # Native tool implementations (SSRF Validator, Jules API)

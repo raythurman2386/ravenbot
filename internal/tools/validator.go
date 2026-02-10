@@ -118,8 +118,8 @@ func ValidateURL(ctx context.Context, urlStr string) error {
 	return nil
 }
 
-// SafeCheckRedirect is a redirect policy that validates the next URL.
-func SafeCheckRedirect(req *http.Request, via []*http.Request) error {
+// safeCheckRedirect is a redirect policy that validates the next URL.
+func safeCheckRedirect(req *http.Request, via []*http.Request) error {
 	if len(via) >= 10 {
 		return fmt.Errorf("too many redirects")
 	}
@@ -131,7 +131,7 @@ func SafeCheckRedirect(req *http.Request, via []*http.Request) error {
 func NewSafeClient(timeout time.Duration) *http.Client {
 	return &http.Client{
 		Timeout:       timeout,
-		CheckRedirect: SafeCheckRedirect,
+		CheckRedirect: safeCheckRedirect,
 		Transport: &http.Transport{
 			DialContext: func(ctx context.Context, network, addr string) (net.Conn, error) {
 				host, port, _ := net.SplitHostPort(addr)
