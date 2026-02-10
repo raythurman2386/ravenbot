@@ -32,6 +32,8 @@ func TestValidateURL(t *testing.T) {
 		{"ORCHID", "http://[2001:10::1]", false, true},
 		{"Blocked port 445 (SMB)", "http://example.com:445", false, true},
 		{"Blocked port 9200 (Elasticsearch)", "http://example.com:9200", false, true},
+		{"Blocked port 10250 (Kubelet)", "http://example.com:10250", false, true},
+		{"Blocked port 16379 (Redis Cluster)", "http://example.com:16379", false, true},
 		{"Allow local URLs", "http://127.0.0.1", true, false},
 	}
 

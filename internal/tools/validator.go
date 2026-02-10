@@ -38,8 +38,17 @@ var (
 		"9300":  true, // Elasticsearch (Nodes)
 		"2375":  true, // Docker API (unencrypted)
 		"2376":  true, // Docker API (TLS)
+		"2381":  true, // etcd metrics
+		"6380":  true, // Redis (SSL)
 		"6443":  true, // Kubernetes API
+		"8001":  true, // Kubernetes API proxy
+		"9090":  true, // Prometheus
+		"9100":  true, // Node Exporter
+		"10250": true, // Kubelet API
+		"10255": true, // Kubelet (Read-only)
 		"11211": true, // Memcached
+		"16379": true, // Redis Cluster
+		"26379": true, // Redis Sentinel
 		"27017": true, // MongoDB
 	}
 
