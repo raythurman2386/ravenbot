@@ -315,6 +315,84 @@ func (a *Agent) ClearSession(sessionID string) {
 	}
 }
 
+func (a *Agent) compressSession(ctx context.Context, sessionID string) error {
+	slog.Info("Compressing session context", "sessionID", sessionID)
+
+	// 1. Get Session
+	resp, err := a.sessionService.Get(ctx, &session.GetRequest{
+		AppName:   AppName,
+		UserID:    sessionID,
+		SessionID: sessionID,
+	})
+	if err != nil {
+		return fmt.Errorf("failed to get session: %w", err)
+	}
+
+	// 2. Build History String
+	var sb strings.Builder
+	for event := range resp.Session.Events().All() {
+		role := event.Author
+		if event.Content != nil {
+			for _, part := range event.Content.Parts {
+				if part.Text != "" {
+					sb.WriteString(fmt.Sprintf("%s: %s\n", role, part.Text))
+				}
+			}
+		}
+	}
+	history := sb.String()
+
+	// 3. Get existing summary
+	existingSummary, err := a.db.GetSessionSummary(ctx, sessionID)
+	if err != nil {
+		slog.Warn("Failed to get existing summary", "error", err)
+	}
+
+	// 4. Prompt for Summary
+	prompt := fmt.Sprintf(`%s
+
+Existing Summary:
+%s
+
+Conversation History:
+%s`, a.cfg.Bot.SummaryPrompt, existingSummary, history)
+
+	respIter := a.flashLLM.GenerateContent(ctx, &model.LLMRequest{
+		Contents: []*genai.Content{{
+			Role:  "user",
+			Parts: []*genai.Part{{Text: prompt}},
+		}},
+	}, false)
+
+	var newSummaryBuilder strings.Builder
+	for resp, err := range respIter {
+		if err != nil {
+			return fmt.Errorf("summarization failed: %w", err)
+		}
+		if resp.Content != nil && len(resp.Content.Parts) > 0 {
+			newSummaryBuilder.WriteString(resp.Content.Parts[0].Text)
+		}
+	}
+	newSummary := strings.TrimSpace(newSummaryBuilder.String())
+
+	// 5. Save Summary
+	if err := a.db.SaveSessionSummary(ctx, sessionID, newSummary); err != nil {
+		return fmt.Errorf("failed to save summary: %w", err)
+	}
+
+	// 6. Delete Session History
+	if err := a.sessionService.Delete(ctx, &session.DeleteRequest{
+		AppName:   AppName,
+		UserID:    sessionID,
+		SessionID: sessionID,
+	}); err != nil {
+		return fmt.Errorf("failed to delete session: %w", err)
+	}
+
+	slog.Info("Session compressed successfully", "sessionID", sessionID)
+	return nil
+}
+
 func (a *Agent) classifyPrompt(ctx context.Context, message string) string {
 	prompt := fmt.Sprintf(a.cfg.Bot.RoutingPrompt, message)
 	respIter := a.flashLLM.GenerateContent(ctx, &model.LLMRequest{
@@ -365,10 +443,13 @@ func (a *Agent) Chat(ctx context.Context, sessionID, message string) (string, er
 
 	classification := a.classifyPrompt(ctx, message)
 	var activeRunner *runner.Runner
+	var tokenLimit int64
 	if classification == "Simple" {
 		activeRunner = a.flashRunner
+		tokenLimit = a.cfg.Bot.FlashTokenLimit
 	} else {
 		activeRunner = a.proRunner
+		tokenLimit = a.cfg.Bot.ProTokenLimit
 	}
 
 	slog.Info("Routed request", "classification", classification)
@@ -378,7 +459,7 @@ func (a *Agent) Chat(ctx context.Context, sessionID, message string) (string, er
 		Parts: []*genai.Part{{Text: message}},
 	}, agent.RunConfig{})
 
-	return a.consumeRunnerEvents(sessionID, events)
+	return a.consumeRunnerEvents(ctx, sessionID, events, tokenLimit)
 }
 
 func (a *Agent) RunMission(ctx context.Context, prompt string) (string, error) {
@@ -435,11 +516,13 @@ func (a *Agent) RunMission(ctx context.Context, prompt string) (string, error) {
 		Parts: []*genai.Part{{Text: prompt}},
 	}, agent.RunConfig{})
 
-	return a.consumeRunnerEvents(missionID, events)
+	return a.consumeRunnerEvents(ctx, missionID, events, 0)
 }
 
-func (a *Agent) consumeRunnerEvents(sessionID string, events iter.Seq2[*session.Event, error]) (string, error) {
+func (a *Agent) consumeRunnerEvents(ctx context.Context, sessionID string, events iter.Seq2[*session.Event, error], tokenLimit int64) (string, error) {
 	var lastText string
+	var maxPromptTokens int64
+
 	for event, err := range events {
 		if err != nil {
 			slog.Error("ADK runner yielded error", "error", err)
@@ -469,11 +552,16 @@ func (a *Agent) consumeRunnerEvents(sessionID string, events iter.Seq2[*session.
 		)
 
 		// Track token usage from every event
-		if a.stats != nil && event.UsageMetadata != nil {
-			a.stats.RecordTokens(
-				int64(event.UsageMetadata.PromptTokenCount),
-				int64(event.UsageMetadata.CandidatesTokenCount),
-			)
+		if event.UsageMetadata != nil {
+			if a.stats != nil {
+				a.stats.RecordTokens(
+					int64(event.UsageMetadata.PromptTokenCount),
+					int64(event.UsageMetadata.CandidatesTokenCount),
+				)
+			}
+			if int64(event.UsageMetadata.PromptTokenCount) > maxPromptTokens {
+				maxPromptTokens = int64(event.UsageMetadata.PromptTokenCount)
+			}
 		}
 
 		// Only collect text from final response events to avoid
@@ -499,6 +587,14 @@ func (a *Agent) consumeRunnerEvents(sessionID string, events iter.Seq2[*session.
 			if text := sb.String(); text != "" {
 				lastText = text
 			}
+		}
+	}
+
+	// Check if context compression is needed
+	if tokenLimit > 0 && maxPromptTokens > int64(float64(tokenLimit)*a.cfg.Bot.CompressionThreshold) {
+		slog.Info("Context limit threshold exceeded, triggering compression", "maxPromptTokens", maxPromptTokens, "limit", tokenLimit)
+		if err := a.compressSession(ctx, sessionID); err != nil {
+			slog.Error("Failed to compress session", "sessionID", sessionID, "error", err)
 		}
 	}
 
