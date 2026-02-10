@@ -26,9 +26,13 @@ type BotConfig struct {
 	ResearchSystemPrompt string `json:"researchSystemPrompt"`
 	SystemManagerPrompt  string `json:"systemManagerPrompt"`
 	JulesPrompt          string `json:"julesPrompt"`
-	HelpMessage          string `json:"helpMessage"`
-	StatusPrompt         string `json:"statusPrompt"`
-	RoutingPrompt        string `json:"routingPrompt"`
+	HelpMessage          string  `json:"helpMessage"`
+	StatusPrompt         string  `json:"statusPrompt"`
+	RoutingPrompt        string  `json:"routingPrompt"`
+	FlashTokenLimit      int64   `json:"flashTokenLimit"`
+	ProTokenLimit        int64   `json:"proTokenLimit"`
+	CompressionThreshold float64 `json:"compressionThreshold"`
+	SummaryPrompt        string  `json:"summaryPrompt"`
 }
 
 // Supported AI backend values.

@@ -33,12 +33,6 @@ import (
 
 const AppName = "ravenbot"
 
-const (
-	FlashContextLimit    = 1_000_000
-	ProContextLimit      = 2_000_000
-	CompressionThreshold = 0.8
-)
-
 type Agent struct {
 	cfg   *config.Config
 	db    *raven.DB
@@ -355,15 +349,13 @@ func (a *Agent) compressSession(ctx context.Context, sessionID string) error {
 	}
 
 	// 4. Prompt for Summary
-	prompt := fmt.Sprintf(`Summarize the following conversation history into a concise context for future reference.
-If there is an existing summary, integrate it.
-Focus on key facts, user preferences, and unresolved tasks.
+	prompt := fmt.Sprintf(`%s
 
 Existing Summary:
 %s
 
 Conversation History:
-%s`, existingSummary, history)
+%s`, a.cfg.Bot.SummaryPrompt, existingSummary, history)
 
 	respIter := a.flashLLM.GenerateContent(ctx, &model.LLMRequest{
 		Contents: []*genai.Content{{
@@ -454,10 +446,10 @@ func (a *Agent) Chat(ctx context.Context, sessionID, message string) (string, er
 	var tokenLimit int64
 	if classification == "Simple" {
 		activeRunner = a.flashRunner
-		tokenLimit = FlashContextLimit
+		tokenLimit = a.cfg.Bot.FlashTokenLimit
 	} else {
 		activeRunner = a.proRunner
-		tokenLimit = ProContextLimit
+		tokenLimit = a.cfg.Bot.ProTokenLimit
 	}
 
 	slog.Info("Routed request", "classification", classification)
@@ -599,7 +591,7 @@ func (a *Agent) consumeRunnerEvents(ctx context.Context, sessionID string, event
 	}
 
 	// Check if context compression is needed
-	if tokenLimit > 0 && maxPromptTokens > int64(float64(tokenLimit)*CompressionThreshold) {
+	if tokenLimit > 0 && maxPromptTokens > int64(float64(tokenLimit)*a.cfg.Bot.CompressionThreshold) {
 		slog.Info("Context limit threshold exceeded, triggering compression", "maxPromptTokens", maxPromptTokens, "limit", tokenLimit)
 		if err := a.compressSession(ctx, sessionID); err != nil {
 			slog.Error("Failed to compress session", "sessionID", sessionID, "error", err)
