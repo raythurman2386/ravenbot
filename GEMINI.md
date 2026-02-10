@@ -9,7 +9,7 @@ This document provides structural and behavioral context for AI agents working o
   - `gemini` (default): Google AI Studio using API Key.
   - `ollama`: Local/remote Ollama via OpenAI-compatible API.
 - **Backend Factory**: `internal/backend` — creates `model.LLM` instances; ensures strict role alternation (User/Model) required by Gemini.
-- **Generative AI**: `google.golang.org/genai` (Gemini 2.0 Pro & Flash for grounding support).
+- **Generative AI**: `google.golang.org/genai` (**Gemini 2.5 Pro & Flash** for grounding support).
 - **Database**: SQLite via `modernc.org/sqlite` (CGO-free).
 - **Official MCP SDK**: Uses `github.com/modelcontextprotocol/go-sdk` for production-grade tool connections.
 
@@ -34,15 +34,18 @@ This document provides structural and behavioral context for AI agents working o
 
 ### 1. Flash-First Model Routing
 RavenBot uses a two-stage routing pattern:
-- **Classification**: User prompts are first sent to **Gemini Flash** to classify them as "Simple" or "Complex".
+- **Classification**: User prompts are first sent to **Gemini 2.5 Flash** to classify them as "Simple" or "Complex".
 - **Execution**:
-    - "Simple" requests are handled by the **Flash Runner**.
-    - "Complex" requests (deep reasoning, technical tasks) are routed to the **Pro Runner**.
+    - "Simple" requests are handled by the **Gemini 2.5 Flash** (our main powerhouse model).
+    - "Complex" requests (deep reasoning, technical tasks) are routed to the **Gemini 2.5 Pro** model.
+
+> [!IMPORTANT]
+> **Model Integrity**: AI agents MUST NOT modify or downgrade the configured Gemini models (currently 2.5 Flash and 2.5 Pro). These models are selected for optimal performance until Gemini 3 models reach General Availability.
 
 ### 2. Active Sub-Agents (A2A Architecture)
 RavenBot utilizes specialized sub-agents to bypass model limitations and enhance accuracy:
 - **SearchAssistant**:
-  - **Goal**: High-accuracy web discovery.
+  - **Goal**: High-accuracy web discovery using fully up-to-date search functionality.
   - **Tools**: `geminitool.GoogleSearch` (Native grounding).
   - **Note**: Isolated because Google Search cannot be mixed with other tools in a single agent instance.
 - **ResearchAssistant**:
