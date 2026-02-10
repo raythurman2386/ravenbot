@@ -11,8 +11,7 @@ Equipped with a pluggable AI backend supporting **Google Gemini** (Gemini 2.5/Fl
 ### 🧠 Advanced Intelligence
 - **Flash-First Routing**: Uses **Gemini 2.5 Flash** to intelligently classify prompts as "Simple" or "Complex", routing them to the optimal model to balance speed and reasoning depth.
 - **Active Sub-Agents**:
-  - **ResearchAssistant**: A specialized agent for deep technical research. It coordinates complex missions and delegates web searches to the `SearchAssistant`.
-  - **SearchAssistant**: A dedicated sub-agent powered by **geminitool.GoogleSearch**. By isolating search, RavenBot leverages Gemini 2.5's official grounding while maintaining compatibility with other tools.
+  - **ResearchAssistant**: A specialized agent for deep technical research and web discovery. It utilizes a custom `web_search` tool with official Google Search grounding to find up-to-date information while maintaining compatibility with other MCP toolsets.
   - **SystemManager**: A specialized agent for system diagnostics and health monitoring using official MCP toolsets.
   - **Jules**: An AI software engineer capable of managing repositories and performing coding tasks.
 - **Production Grounding**: Uses official **Google Search** grounding for high-accuracy, up-to-date technical research.
@@ -28,7 +27,7 @@ ravenbot utilizes the official **Model Context Protocol (MCP)** SDK, allowing it
 ### 💬 Multi-Channel & Interactive
 - **Proactive Heartbeat**: Automated daily technical newsletters scheduled via `CronLib`.
 - **Two-Way Comms**: Interactive listeners for **Telegram** and **Discord**.
-  - `/research <topic>` - Trigger a deep-dive research mission on any subject.
+  - `/research <topic>` - Trigger a deep-dive research mission with official Google Search grounding.
   - `/jules <repo> <task>` - Delegate complex coding or repository tasks to the **Jules Agent API**.
   - `/status` - Check system health (disk, memory, uptime) via **SystemManager**.
 - **Secure by Design**: Restricted message processing to authorized Chat/Channel IDs and built-in SSRF protection.
@@ -85,13 +84,18 @@ docker compose up -d --build
 |----------|-------------|
 | `AI_BACKEND` | AI backend to use: `gemini` (default) or `ollama`. |
 | `GEMINI_API_KEY` | **Required for Gemini**. Your Google AI Studio API Key. |
+| `GEMINI_FLASH_MODEL` | Override for the Flash model (default: `gemini-2.5-flash`). |
+| `GEMINI_PRO_MODEL` | Override for the Pro model (default: `gemini-2.5-pro`). |
 | `OLLAMA_BASE_URL` | Ollama API URL (default: `http://localhost:11434/v1`). |
 | `OLLAMA_MODEL` | Default Ollama model for both Flash and Pro tiers. |
+| `OLLAMA_FLASH_MODEL` | Optional override for the Flash model tier (Ollama). |
+| `OLLAMA_PRO_MODEL` | Optional override for the Pro model tier (Ollama). |
 | `TELEGRAM_BOT_TOKEN` | Token for the Telegram bot. |
 | `TELEGRAM_CHAT_ID` | Authorized Telegram Chat ID. |
 | `DISCORD_BOT_TOKEN` | Token for the Discord bot. |
 | `DISCORD_CHANNEL_ID` | Authorized Discord Channel ID. |
 | `JULES_API_KEY` | API Key for Jules Agent delegation. |
+| `GITHUB_PERSONAL_ACCESS_TOKEN` | Required for GitHub MCP server features. |
 | `ALLOW_LOCAL_URLS` | Set to `true` to allow access to local/private IPs (default: `false`). |
 
 ---
@@ -100,12 +104,14 @@ docker compose up -d --build
 
 - `cmd/bot/`: Main application entry point and interactive loop.
 - `internal/agent/`: Core agent logic, routing, sub-agents, and ADK integration.
-- `internal/backend/`: Backend factory — creates `model.LLM` instances.
+- `internal/handler/`: Unified message routing and command handling.
+- `internal/backend/`: Backend factory and Gemini role compatibility wrapper.
 - `internal/ollama/`: Ollama adapter implementing `model.LLM`.
-- `internal/tools/`: Custom tool implementations (Jules, Validator).
+- `internal/tools/`: Custom tool implementations (Jules, Web Search, Validator).
 - `internal/db/`: Persistence layer (SQLite) for briefings and reminders.
 - `internal/notifier/`: Messaging integrations (Telegram, Discord).
 - `internal/config/`: Configuration and environment loading.
+- `internal/stats/`: Token usage and system statistics tracking.
 - `daily_logs/`: Local storage for generated Markdown reports.
 
 ---
