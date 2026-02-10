@@ -22,10 +22,10 @@ type JobConfig struct {
 }
 
 type BotConfig struct {
-	SystemPrompt         string `json:"systemPrompt"`
-	ResearchSystemPrompt string `json:"researchSystemPrompt"`
-	SystemManagerPrompt  string `json:"systemManagerPrompt"`
-	JulesPrompt          string `json:"julesPrompt"`
+	SystemPrompt         string  `json:"systemPrompt"`
+	ResearchSystemPrompt string  `json:"researchSystemPrompt"`
+	SystemManagerPrompt  string  `json:"systemManagerPrompt"`
+	JulesPrompt          string  `json:"julesPrompt"`
 	HelpMessage          string  `json:"helpMessage"`
 	StatusPrompt         string  `json:"statusPrompt"`
 	RoutingPrompt        string  `json:"routingPrompt"`
