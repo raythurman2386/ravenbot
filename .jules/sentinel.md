@@ -27,3 +27,8 @@
 **Vulnerability:** SSRF protection missed several sensitive internal ports (SMB, etcd, etc.) and non-routable IPv6 ranges. Additionally, while `NewSafeClient` protects HTTP tools, `chromedp` (used in `BrowseWeb`) bypasses these protections for sub-resources and redirects after the initial `ValidateURL` check.
 **Learning:** Blacklists must be regularly updated to account for common internal services. However, tool-specific network stacks (like Chrome's in `chromedp`) require specialized interception (e.g., `network.SetRequestPaused`) to be fully secured, as a simple entry-point URL check is insufficient against redirects or malicious sub-resources.
 **Prevention:** Maintain a comprehensive and expanding list of blocked ports and non-routable CIDRs. For browser-based tools, investigate Chrome DevTools Protocol (CDP) level request interception to enforce SSRF policies consistently across the entire network stack.
+
+## 2025-02-21 - Consolidating SSRF Protection Across All Outbound Clients
+**Vulnerability:** Despite having a centralized `NewSafeClient`, several components (Ollama adapter, MCP SSE transport, and Gemini grounded search) were still using `http.DefaultClient` or default SDK configurations, leaving them vulnerable to SSRF.
+**Learning:** Security primitives are only effective if they are universally applied. SDKs often hide the underlying HTTP client, making it easy to overlook.
+**Prevention:** Explicitly configure all SDKs and adapters (GenAI, MCP, Ollama) to use the secured `NewSafeClient`. Use `TestMain` to enable `ALLOW_LOCAL_URLS` for tests that require `httptest.NewServer` without compromising production safety.

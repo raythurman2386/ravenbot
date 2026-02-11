@@ -98,7 +98,10 @@ func NewAgent(ctx context.Context, cfg *config.Config, database *raven.DB, botSt
 			slog.Info("Initializing official MCP Toolset", "name", name)
 			var transport officialmcp.Transport
 			if strings.HasPrefix(serverCfg.Command, "http://") || strings.HasPrefix(serverCfg.Command, "https://") {
-				transport = &officialmcp.SSEClientTransport{Endpoint: serverCfg.Command}
+				transport = &officialmcp.SSEClientTransport{
+					Endpoint:   serverCfg.Command,
+					HTTPClient: tools.NewSafeClient(0),
+				}
 			} else {
 				cmd := exec.Command(serverCfg.Command, serverCfg.Args...)
 				if len(serverCfg.Env) > 0 {
