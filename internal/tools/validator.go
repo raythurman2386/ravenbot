@@ -145,8 +145,10 @@ func NewSafeClient(timeout time.Duration) *http.Client {
 			DialContext: func(ctx context.Context, network, addr string) (net.Conn, error) {
 				host, port, _ := net.SplitHostPort(addr)
 
+				allowLocal := os.Getenv("ALLOW_LOCAL_URLS") == "true"
+
 				// Defense-in-depth: check port against blacklist even in DialContext
-				if blockedPorts[port] && os.Getenv("ALLOW_LOCAL_URLS") != "true" {
+				if blockedPorts[port] && !allowLocal {
 					return nil, fmt.Errorf("restricted port: %s", port)
 				}
 
@@ -154,10 +156,24 @@ func NewSafeClient(timeout time.Duration) *http.Client {
 				if err != nil {
 					return nil, fmt.Errorf("DNS lookup failed for %s: %w", host, err)
 				}
+
+				// Try all non-restricted IPs, falling through on dial failure
+				// so DNS round-robin provides resilience.
+				var lastErr error
 				for _, ip := range ips {
-					if !isRestrictedIP(ip) || os.Getenv("ALLOW_LOCAL_URLS") == "true" {
-						return (&net.Dialer{}).DialContext(ctx, network, net.JoinHostPort(ip.String(), port))
+					if isRestrictedIP(ip) && !allowLocal {
+						continue
 					}
+					conn, dialErr := (&net.Dialer{}).DialContext(ctx, network, net.JoinHostPort(ip.String(), port))
+					if dialErr != nil {
+						lastErr = dialErr
+						continue
+					}
+					return conn, nil
+				}
+
+				if lastErr != nil {
+					return nil, fmt.Errorf("all resolved IPs failed for %s: %w", host, lastErr)
 				}
 				return nil, fmt.Errorf("connection to restricted IP blocked")
 			},

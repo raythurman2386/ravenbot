@@ -173,6 +173,88 @@ func TestHandleMessage_StatsIncrement(t *testing.T) {
 	assert.Equal(t, int64(2), h.stats.MessagesProcessed())
 }
 
+func TestIsAdequateReport(t *testing.T) {
+	t.Parallel()
+
+	// A realistic "good" report that exceeds minReportLength (1024 bytes).
+	goodReport := strings.Repeat("Today's briefing covers weather, tech news, and project updates. ", 30)
+
+	tests := []struct {
+		name string
+		in   string
+		want bool
+	}{
+		{
+			name: "adequate report",
+			in:   goodReport,
+			want: true,
+		},
+		{
+			name: "too short",
+			in:   "Sorry, I could not complete the request.",
+			want: false,
+		},
+		{
+			name: "exactly at threshold",
+			in:   strings.Repeat("x", minReportLength),
+			want: true,
+		},
+		{
+			name: "one byte below threshold",
+			in:   strings.Repeat("x", minReportLength-1),
+			want: false,
+		},
+		{
+			name: "empty report",
+			in:   "",
+			want: false,
+		},
+		{
+			name: "contains unable to fulfill",
+			in:   goodReport + " I am unable to fulfill this request due to tool errors.",
+			want: false,
+		},
+		{
+			name: "contains tools are not found",
+			in:   goodReport + " The tools are not found in my current environment.",
+			want: false,
+		},
+		{
+			name: "contains tools are not available",
+			in:   goodReport + " The tools are not available right now.",
+			want: false,
+		},
+		{
+			name: "contains not found or available to me",
+			in:   goodReport + " These tools are not found or available to me.",
+			want: false,
+		},
+		{
+			name: "contains encountering persistent errors",
+			in:   goodReport + " I am encountering persistent errors with the tools.",
+			want: false,
+		},
+		{
+			name: "failure signal case insensitive",
+			in:   goodReport + " I am UNABLE TO FULFILL this request.",
+			want: false,
+		},
+		{
+			name: "no false positive on partial match",
+			in:   goodReport + " The system is fully available and tools are working.",
+			want: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			got := isAdequateReport(tt.in)
+			assert.Equal(t, tt.want, got, "isAdequateReport(%q...)", tt.in[:min(len(tt.in), 60)])
+		})
+	}
+}
+
 func TestDeliverReminders(t *testing.T) {
 	t.Parallel()
 	h, database := newTestHandler(t)

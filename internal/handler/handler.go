@@ -16,7 +16,21 @@ import (
 	"github.com/raythurman2386/ravenbot/internal/stats"
 )
 
-const MaxInputLength = 10000
+const (
+	MaxInputLength = 10000
+
+	// minReportLength is the minimum byte length for a report to be
+	// considered successful. Reports shorter than this are likely error
+	// messages from the LLM when tools are unavailable.
+	minReportLength = 1024
+
+	// maxJobRetries is the number of retry attempts for a failed research job.
+	maxJobRetries = 1
+
+	// jobRetryDelay is the pause between retry attempts, giving transient
+	// MCP/network issues time to recover.
+	jobRetryDelay = 30 * time.Second
+)
 
 // Handler owns all message routing, command handling, and job execution.
 type Handler struct {
@@ -224,10 +238,38 @@ func (h *Handler) RunJob(ctx context.Context, job config.JobConfig) {
 		today := time.Now().Format("Monday, January 2, 2006")
 		fullPrompt := fmt.Sprintf("Today is %s. %s", today, prompt)
 
-		report, err := h.bot.RunMission(ctx, fullPrompt)
+		var report string
+		var err error
+
+		for attempt := range maxJobRetries + 1 {
+			if attempt > 0 {
+				slog.Warn("Retrying job after inadequate report", "name", job.Name, "attempt", attempt+1, "delay", jobRetryDelay)
+				time.Sleep(jobRetryDelay)
+			}
+
+			report, err = h.bot.RunMission(ctx, fullPrompt)
+			if err != nil {
+				slog.Error("Job mission failed", "name", job.Name, "attempt", attempt+1, "error", err)
+				continue
+			}
+
+			if isAdequateReport(report) {
+				break
+			}
+
+			slog.Warn("Job produced inadequate report", "name", job.Name, "attempt", attempt+1, "length", len(report))
+			// Treat as failure for retry purposes but keep report in case
+			// all retries produce the same result — saving a bad report is
+			// better than saving nothing.
+		}
+
 		if err != nil {
-			slog.Error("Job failed", "name", job.Name, "error", err)
+			slog.Error("Job failed after retries", "name", job.Name, "error", err)
 			return
+		}
+
+		if !isAdequateReport(report) {
+			slog.Warn("Job completed with inadequate report after retries, saving anyway", "name", job.Name, "length", len(report))
 		}
 
 		path, err := agent.SaveReport("daily_logs", report)
@@ -255,6 +297,29 @@ func (h *Handler) RunJob(ctx context.Context, job config.JobConfig) {
 	default:
 		slog.Warn("Unknown job type", "type", job.Type, "name", job.Name)
 	}
+}
+
+// isAdequateReport checks whether a report looks like a real result
+// rather than an LLM error/apology about unavailable tools.
+func isAdequateReport(report string) bool {
+	if len(report) < minReportLength {
+		return false
+	}
+
+	lower := strings.ToLower(report)
+	failureSignals := []string{
+		"unable to fulfill",
+		"tools are not found",
+		"tools are not available",
+		"not found or available to me",
+		"encountering persistent errors",
+	}
+	for _, signal := range failureSignals {
+		if strings.Contains(lower, signal) {
+			return false
+		}
+	}
+	return true
 }
 
 // DeliverReminders checks for pending reminders and delivers them.
