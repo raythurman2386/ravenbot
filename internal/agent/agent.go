@@ -494,20 +494,13 @@ func (a *Agent) RunMission(ctx context.Context, prompt string) (string, error) {
 		}
 	}()
 
-	missionAgent, err := llmagent.New(llmagent.Config{
-		Name:        "ravenbot-mission",
-		Model:       a.flashLLM,
-		Description: "RavenBot research mission agent",
-		Instruction: a.cfg.Bot.ResearchSystemPrompt,
-		SubAgents:   []agent.Agent{a.researchAssistant},
-	})
-	if err != nil {
-		return "", err
-	}
-
+	// Run ResearchAssistant directly as the root agent. Previously a
+	// coordinator agent wrapped it, but the coordinator only had
+	// transfer_to_agent and its instruction described tools it didn't
+	// own, causing intermittent "tools not found" failures.
 	missionRunner, err := runner.New(runner.Config{
 		AppName:        AppName,
-		Agent:          missionAgent,
+		Agent:          a.researchAssistant,
 		SessionService: a.sessionService,
 	})
 	if err != nil {
