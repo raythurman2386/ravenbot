@@ -5,9 +5,9 @@ import (
 	"iter"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
 	"google.golang.org/adk/model"
 	"google.golang.org/genai"
-	"github.com/stretchr/testify/assert"
 )
 
 type mockLLM struct {

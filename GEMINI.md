@@ -20,11 +20,13 @@ This document provides structural and behavioral context for AI agents working o
 ├── internal/
 │   ├── agent/             # Core AI logic (Agent struct, Sub-agents, A2A delegation)
 │   │   └── agent.go       # ADK Agent initialization, sub-agent tree, and tool registration
-│   ├── backend/           # Backend factory and Gemini role wrapper
+│   ├── handler/           # Unified message routing and command handling
+│   ├── backend/           # Backend factory and Gemini role wrapper (SystemRoleWrapper)
 │   ├── ollama/            # Ollama adapter (OpenAI-compatible API → model.LLM)
-│   ├── tools/             # Native tool implementations (SSRF Validator, Jules API)
-│   ├── db/                # SQLite persistence (Briefings, Reminders)
+│   ├── tools/             # Native tool implementations (SSRF Validator, Jules API, Web Search)
+│   ├── db/                # SQLite persistence (Briefings, Reminders, Session Summaries)
 │   ├── notifier/          # Telegram & Discord delivery systems
+│   ├── stats/             # Token usage and system statistics tracking
 │   └── config/            # Environment and JSON configuration loading
 ├── config.json            # Bot settings, MCP servers, and scheduled jobs
 └── Makefile               # Development workflow (build, test, lint)
@@ -44,14 +46,10 @@ RavenBot uses a two-stage routing pattern:
 
 ### 2. Active Sub-Agents (A2A Architecture)
 RavenBot utilizes specialized sub-agents to bypass model limitations and enhance accuracy:
-- **SearchAssistant**:
-  - **Goal**: High-accuracy web discovery using fully up-to-date search functionality.
-  - **Tools**: `geminitool.GoogleSearch` (Native grounding).
-  - **Note**: Isolated because Google Search cannot be mixed with other tools in a single agent instance.
 - **ResearchAssistant**:
   - **Goal**: Deep technical research and data aggregation.
-  - **Delegation**: Asks `SearchAssistant` for web searches.
-  - **Toolsets**: Uses all active MCP toolsets for context.
+  - **Search Implementation**: Uses a custom `web_search` tool that performs a standalone Gemini API call with official Google Search grounding. This architecture bypasses the Gemini restriction that prevents mixing grounding with other function-calling toolsets (like MCP) in a single turn.
+  - **Toolsets**: Uses all active MCP toolsets (weather, memory, filesystem) for context.
 - **SystemManager**:
   - **Goal**: System health monitoring and diagnostics.
   - **Tools**: Official MCP toolsets (e.g., `sysmetrics`).
@@ -69,8 +67,8 @@ Integrated via `google.golang.org/adk/tool/mcptoolset`.
 - Summaries are injected into the system prompt to maintain long-term context while keeping the active window lean.
 
 ## 🛡 Security & Constraints
-- **SSRF Protection**: All outbound requests must pass through `internal/tools/validator.go`.
-- **Role Requirements**: The `SystemRoleWrapper` in `internal/backend` ensures the message history follows the strict User -> Model alternation pattern.
+- **SSRF Protection**: All outbound requests must pass through `internal/tools/validator.go`. The `NewSafeClient` provides DNS rebinding protection and port blacklisting.
+- **Role Requirements**: The `SystemRoleWrapper` in `internal/backend` ensures the message history follows the strict User -> Model alternation pattern required by the Gemini API. It merges consecutive same-role messages and normalizes roles like "assistant" or "system".
 - **Pi Optimization**: Builds use `GOARCH=arm64` and `-ldflags="-s -w"` for Raspberry Pi 5 performance.
 
 ## 📝 Conventions
