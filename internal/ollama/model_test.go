@@ -23,8 +23,8 @@ func TestNew_Defaults(t *testing.T) {
 	if m.modelName != DefaultModel {
 		t.Errorf("modelName = %v, want %v", m.modelName, DefaultModel)
 	}
-	if m.httpClient != http.DefaultClient {
-		t.Error("httpClient should be http.DefaultClient")
+	if m.httpClient == http.DefaultClient {
+		t.Error("httpClient should not be http.DefaultClient")
 	}
 }
 

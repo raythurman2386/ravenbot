@@ -13,6 +13,7 @@ import (
 	"reflect"
 	"strings"
 
+	"github.com/raythurman2386/ravenbot/internal/tools"
 	"google.golang.org/adk/model"
 	"google.golang.org/adk/tool"
 	"google.golang.org/genai"
@@ -59,7 +60,7 @@ func New(opts ...Option) *Model {
 	m := &Model{
 		baseURL:    DefaultBaseURL,
 		modelName:  DefaultModel,
-		httpClient: http.DefaultClient,
+		httpClient: tools.NewSafeClient(0),
 	}
 	for _, opt := range opts {
 		opt(m)

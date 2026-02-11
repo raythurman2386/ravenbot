@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log/slog"
 	"strings"
+	"time"
 
 	"google.golang.org/genai"
 )
@@ -19,7 +20,8 @@ func WebSearch(ctx context.Context, apiKey, model, query string) (string, error)
 	}
 
 	client, err := genai.NewClient(ctx, &genai.ClientConfig{
-		APIKey: apiKey,
+		APIKey:     apiKey,
+		HTTPClient: NewSafeClient(30 * time.Second),
 	})
 	if err != nil {
 		return "", fmt.Errorf("failed to create genai client: %w", err)
