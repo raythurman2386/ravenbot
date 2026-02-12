@@ -8,6 +8,7 @@ import (
 
 	"github.com/raythurman2386/ravenbot/internal/config"
 	"github.com/raythurman2386/ravenbot/internal/ollama"
+	"github.com/raythurman2386/ravenbot/internal/tools"
 
 	"google.golang.org/adk/model"
 	"google.golang.org/adk/model/gemini"
@@ -17,7 +18,8 @@ import (
 // geminiClientConfig builds the genai.ClientConfig for Google AI (Gemini).
 func geminiClientConfig(cfg *config.Config) *genai.ClientConfig {
 	return &genai.ClientConfig{
-		APIKey: cfg.GeminiAPIKey,
+		APIKey:     cfg.GeminiAPIKey,
+		HTTPClient: tools.NewSafeClient(0),
 	}
 }
 
