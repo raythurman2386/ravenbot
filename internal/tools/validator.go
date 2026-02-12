@@ -22,6 +22,8 @@ var (
 		"143":   true, // IMAP
 		"445":   true, // SMB
 		"161":   true, // SNMP
+		"1433":  true, // MSSQL
+		"1521":  true, // Oracle DB
 		"2049":  true, // NFS
 		"2379":  true, // etcd client
 		"2380":  true, // etcd peer
@@ -29,10 +31,17 @@ var (
 		"4243":  true, // Docker API (alternative)
 		"5000":  true, // Docker Registry
 		"5432":  true, // PostgreSQL
+		"5672":  true, // RabbitMQ
+		"5900":  true, // VNC
+		"5901":  true, // VNC
 		"5985":  true, // WinRM (HTTP)
 		"5986":  true, // WinRM (HTTPS)
 		"6379":  true, // Redis
 		"7001":  true, // WebLogic
+		"8000":  true, // Common dev port
+		"8080":  true, // Common internal admin/proxy
+		"8443":  true, // Common internal admin/HTTPS
+		"8888":  true, // Common dev/Jupyter
 		"9000":  true, // PHP-FPM / FastCGI
 		"9200":  true, // Elasticsearch (HTTP)
 		"9300":  true, // Elasticsearch (Nodes)

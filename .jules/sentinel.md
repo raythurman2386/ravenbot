@@ -32,3 +32,8 @@
 **Vulnerability:** Despite having a centralized `NewSafeClient`, several components (Ollama adapter, MCP SSE transport, and Gemini grounded search) were still using `http.DefaultClient` or default SDK configurations, leaving them vulnerable to SSRF.
 **Learning:** Security primitives are only effective if they are universally applied. SDKs often hide the underlying HTTP client, making it easy to overlook.
 **Prevention:** Explicitly configure all SDKs and adapters (GenAI, MCP, Ollama) to use the secured `NewSafeClient`. Use `TestMain` to enable `ALLOW_LOCAL_URLS` for tests that require `httptest.NewServer` without compromising production safety.
+
+## 2025-02-25 - Hardened SSRF: Port Blacklist Expansion and GenAI Integration
+**Vulnerability:** The SSRF port blacklist was missing several common internal service ports (MSSQL, Oracle, RabbitMQ, VNC). Additionally, the main Gemini GenAI client configuration in the backend was not yet integrated with the centralized `NewSafeClient`.
+**Learning:** Security hardening is an iterative process. Even with a centralized "safe client," every new outbound connection (like a new LLM backend) must be explicitly opted into the protection. Blocking common development ports like 8080 and 8888 provides a necessary layer of defense against accidental exposure of internal administration or development tools.
+**Prevention:** Maintain a comprehensive and regularly updated port blacklist. Ensure every new outbound HTTP client, including those used by LLM SDKs, is initialized via the centralized security factory (`NewSafeClient`).
