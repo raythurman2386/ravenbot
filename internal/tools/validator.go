@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"strconv"
 	"time"
 )
 
@@ -19,17 +20,35 @@ var (
 		"25":    true, // SMTP
 		"53":    true, // DNS
 		"110":   true, // POP3
+		"137":   true, // NetBIOS
+		"138":   true, // NetBIOS
+		"139":   true, // NetBIOS
 		"143":   true, // IMAP
-		"445":   true, // SMB
 		"161":   true, // SNMP
+		"445":   true, // SMB
+		"465":   true, // SMTPS
+		"587":   true, // SMTP Submission
+		"993":   true, // IMAPS
+		"995":   true, // POP3S
 		"1433":  true, // MSSQL
 		"1521":  true, // Oracle DB
 		"2049":  true, // NFS
+		"2375":  true, // Docker API (unencrypted)
+		"2376":  true, // Docker API (TLS)
 		"2379":  true, // etcd client
 		"2380":  true, // etcd peer
+		"2381":  true, // etcd metrics
+		"3000":  true, // Common dev/Grafana
+		"3001":  true, // Common dev
 		"3306":  true, // MySQL
+		"3389":  true, // RDP
+		"4000":  true, // Common dev/Phoenix
 		"4243":  true, // Docker API (alternative)
-		"5000":  true, // Docker Registry
+		"5000":  true, // Docker Registry / Flask
+		"5001":  true, // Synology Admin / Dev
+		"5060":  true, // SIP
+		"5061":  true, // SIP (TLS)
+		"5353":  true, // mDNS
 		"5432":  true, // PostgreSQL
 		"5672":  true, // RabbitMQ
 		"5900":  true, // VNC
@@ -37,22 +56,21 @@ var (
 		"5985":  true, // WinRM (HTTP)
 		"5986":  true, // WinRM (HTTPS)
 		"6379":  true, // Redis
+		"6380":  true, // Redis (SSL)
+		"6443":  true, // Kubernetes API
 		"7001":  true, // WebLogic
 		"8000":  true, // Common dev port
+		"8001":  true, // Kubernetes API proxy
 		"8080":  true, // Common internal admin/proxy
 		"8443":  true, // Common internal admin/HTTPS
 		"8888":  true, // Common dev/Jupyter
-		"9000":  true, // PHP-FPM / FastCGI
-		"9200":  true, // Elasticsearch (HTTP)
-		"9300":  true, // Elasticsearch (Nodes)
-		"2375":  true, // Docker API (unencrypted)
-		"2376":  true, // Docker API (TLS)
-		"2381":  true, // etcd metrics
-		"6380":  true, // Redis (SSL)
-		"6443":  true, // Kubernetes API
-		"8001":  true, // Kubernetes API proxy
+		"9000":  true, // PHP-FPM / FastCGI / Portainer
 		"9090":  true, // Prometheus
 		"9100":  true, // Node Exporter
+		"9200":  true, // Elasticsearch (HTTP)
+		"9300":  true, // Elasticsearch (Nodes)
+		"9443":  true, // Portainer (HTTPS)
+		"10000": true, // Webmin / Control Panels
 		"10250": true, // Kubelet API
 		"10255": true, // Kubelet (Read-only)
 		"11211": true, // Memcached
@@ -91,7 +109,7 @@ func init() {
 
 // isRestrictedIP returns true if the IP belongs to a restricted (private, loopback, etc.) range.
 func isRestrictedIP(ip net.IP) bool {
-	if ip.IsLoopback() || ip.IsPrivate() || ip.IsLinkLocalUnicast() || ip.IsLinkLocalMulticast() || ip.IsUnspecified() {
+	if ip.IsLoopback() || ip.IsPrivate() || ip.IsLinkLocalUnicast() || ip.IsMulticast() || ip.IsUnspecified() {
 		return true
 	}
 	for _, block := range additionalRestrictedRanges {
@@ -100,6 +118,19 @@ func isRestrictedIP(ip net.IP) bool {
 		}
 	}
 	return false
+}
+
+// normalizePort returns a canonical string representation of a port string
+// by removing leading zeros. If the port is invalid, it returns the original string.
+func normalizePort(port string) string {
+	if port == "" {
+		return ""
+	}
+	p, err := strconv.Atoi(port)
+	if err != nil {
+		return port
+	}
+	return strconv.Itoa(p)
 }
 
 // ValidateURL checks if a URL is safe for fetching by blocking restricted IP ranges and ports.
@@ -119,7 +150,7 @@ func ValidateURL(ctx context.Context, urlStr string) error {
 
 	// Port-based SSRF protection
 	if port := u.Port(); port != "" {
-		if blockedPorts[port] {
+		if blockedPorts[normalizePort(port)] {
 			return fmt.Errorf("restricted port: %s", port)
 		}
 	}
@@ -157,7 +188,7 @@ func NewSafeClient(timeout time.Duration) *http.Client {
 				allowLocal := os.Getenv("ALLOW_LOCAL_URLS") == "true"
 
 				// Defense-in-depth: check port against blacklist even in DialContext
-				if blockedPorts[port] && !allowLocal {
+				if blockedPorts[normalizePort(port)] && !allowLocal {
 					return nil, fmt.Errorf("restricted port: %s", port)
 				}
 

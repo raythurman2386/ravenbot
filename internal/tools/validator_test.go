@@ -34,6 +34,9 @@ func TestIsRestrictedIP_Coverage(t *testing.T) {
 		{"IPv6 benchmarking", "2001:2::1", true},
 		{"IPv6 ORCHID", "2001:10::1", true},
 		{"IPv6 public", "2607:f8b0:4004:800::200e", false},
+		{"IPv4 Multicast", "224.0.0.1", true},
+		{"IPv6 Multicast", "ff02::1", true},
+		{"IPv6 Multicast Site-local", "ff05::1", true},
 	}
 
 	for _, tt := range tests {
@@ -140,6 +143,10 @@ func TestValidateURL(t *testing.T) {
 		{"Blocked port 9200 (Elasticsearch)", "http://example.com:9200", false, true},
 		{"Blocked port 10250 (Kubelet)", "http://example.com:10250", false, true},
 		{"Blocked port 16379 (Redis Cluster)", "http://example.com:16379", false, true},
+		{"Blocked port 3389 (RDP)", "http://example.com:3389", false, true},
+		{"Blocked port 3000 (Grafana/Node)", "http://example.com:3000", false, true},
+		{"Blocked port 10000 (Webmin)", "http://example.com:10000", false, true},
+		{"Port bypass with leading zeros", "http://example.com:0022", false, true},
 		{"Allow local URLs", "http://127.0.0.1", true, false},
 	}
 

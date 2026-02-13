@@ -37,3 +37,8 @@
 **Vulnerability:** The SSRF port blacklist was missing several common internal service ports (MSSQL, Oracle, RabbitMQ, VNC). Additionally, the main Gemini GenAI client configuration in the backend was not yet integrated with the centralized `NewSafeClient`.
 **Learning:** Security hardening is an iterative process. Even with a centralized "safe client," every new outbound connection (like a new LLM backend) must be explicitly opted into the protection. Blocking common development ports like 8080 and 8888 provides a necessary layer of defense against accidental exposure of internal administration or development tools.
 **Prevention:** Maintain a comprehensive and regularly updated port blacklist. Ensure every new outbound HTTP client, including those used by LLM SDKs, is initialized via the centralized security factory (`NewSafeClient`).
+
+## 2025-03-01 - SSRF Bypass via Port String Normalization
+**Vulnerability:** SSRF protection using a string-based port blacklist could be bypassed by using leading zeros in the port (e.g., `:0022` instead of `:22`). The `isRestrictedIP` check was also missing some multicast ranges.
+**Learning:** Canonicalization is critical for security checks. Numeric values like ports should be normalized to a standard representation before being compared against a blacklist. Relying on raw user-provided strings for security decisions is dangerous.
+**Prevention:** Always normalize security-sensitive inputs. For ports, convert the string to an integer and back to a canonical string (or check as an integer). Broaden IP checks to include all multicast ranges via `IsMulticast()`.
