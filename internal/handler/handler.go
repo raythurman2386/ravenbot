@@ -3,16 +3,16 @@ package handler
 import (
 	"context"
 	"fmt"
-	"log/slog"
-	"strconv"
-	"strings"
-	"sync"
-	"time"
 	"github.com/raythurman2386/ravenbot/internal/agent"
 	"github.com/raythurman2386/ravenbot/internal/config"
 	"github.com/raythurman2386/ravenbot/internal/db"
 	"github.com/raythurman2386/ravenbot/internal/notifier"
 	"github.com/raythurman2386/ravenbot/internal/stats"
+	"log/slog"
+	"strconv"
+	"strings"
+	"sync"
+	"time"
 )
 
 const (
