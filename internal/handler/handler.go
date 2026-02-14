@@ -8,7 +8,6 @@ import (
 	"strings"
 	"sync"
 	"time"
-
 	"github.com/raythurman2386/ravenbot/internal/agent"
 	"github.com/raythurman2386/ravenbot/internal/config"
 	"github.com/raythurman2386/ravenbot/internal/db"
@@ -32,9 +31,16 @@ const (
 	jobRetryDelay = 30 * time.Second
 )
 
+// Bot defines the required interface for the AI agent.
+type Bot interface {
+	Chat(ctx context.Context, sessionID, message string) (string, error)
+	RunMission(ctx context.Context, prompt string) (string, error)
+	ClearSession(sessionID string)
+}
+
 // Handler owns all message routing, command handling, and job execution.
 type Handler struct {
-	bot       *agent.Agent
+	bot       Bot
 	db        *db.DB
 	cfg       *config.Config
 	stats     *stats.Stats
@@ -46,7 +52,7 @@ type Handler struct {
 }
 
 // New creates a Handler with all required dependencies.
-func New(bot *agent.Agent, database *db.DB, cfg *config.Config, s *stats.Stats, notifiers []notifier.Notifier) *Handler {
+func New(bot Bot, database *db.DB, cfg *config.Config, s *stats.Stats, notifiers []notifier.Notifier) *Handler {
 	return &Handler{
 		bot:       bot,
 		db:        database,
@@ -122,7 +128,7 @@ func (h *Handler) handleStatus(ctx context.Context, sessionID string, reply func
 	response, err := h.bot.Chat(ctx, sessionID, h.cfg.Bot.StatusPrompt)
 	if err != nil {
 		slog.Error("Status check failed", "sessionID", sessionID, "error", err)
-		reply(fmt.Sprintf("❌ Status check failed. I couldn't retrieve the system health metrics: %v", err))
+		reply("❌ Status check failed. I couldn't retrieve the system health metrics.")
 		return
 	}
 	reply(response)
@@ -191,7 +197,7 @@ func (h *Handler) handleResearch(ctx context.Context, text string, reply func(st
 	report, err := h.bot.RunMission(ctx, prompt)
 	if err != nil {
 		slog.Error("Research failed", "topic", topic, "error", err)
-		reply(fmt.Sprintf("❌ Research failed. I couldn't complete the research mission: %v", err))
+		reply("❌ Research failed. I couldn't complete the research mission.")
 		return
 	}
 	h.stats.RecordMission()
@@ -214,7 +220,7 @@ func (h *Handler) handleJules(ctx context.Context, sessionID, text string, reply
 	response, err := h.bot.Chat(ctx, sessionID, prompt)
 	if err != nil {
 		slog.Error("Jules delegation failed", "repo", repo, "task", task, "error", err)
-		reply(fmt.Sprintf("❌ Jules delegation failed. I couldn't hand off the task to Jules: %v", err))
+		reply("❌ Jules delegation failed. I couldn't hand off the task to Jules.")
 		return
 	}
 	reply(response)
@@ -223,7 +229,8 @@ func (h *Handler) handleJules(ctx context.Context, sessionID, text string, reply
 func (h *Handler) handleChat(ctx context.Context, sessionID, text string, reply func(string)) {
 	response, err := h.bot.Chat(ctx, sessionID, text)
 	if err != nil {
-		reply(fmt.Sprintf("Sorry, I encountered an error: %v", err))
+		slog.Error("Chat failed", "sessionID", sessionID, "error", err)
+		reply("Sorry, I encountered an error while processing your request.")
 		return
 	}
 	reply(response)
